@@ -79,7 +79,7 @@
     const button = executive ? 'executive-download-button' : 'download-button';
     const label = executive ? 'executivo' : 'completo';
     const selected = selection, scope = page.report_scope_sha256, stamp = generation;
-    const filename = 'canca-' + selected.assessment + (executive ? '-executive.zip' : '-report.zip');
+    const filename = executive ? 'canca-executive.zip' : 'canca-report.zip';
     busy = true; controls(); message('Preparando relatório ' + label + '…');
     try {
       const blob = await request('/api/v1/assessments/' + encodeURIComponent(selected.assessment) +
