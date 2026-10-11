@@ -4,6 +4,7 @@ import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
 import P01_Workspace_Service as service
@@ -67,6 +68,46 @@ class SSHCoordinatorTests(unittest.TestCase):
         self.assertTrue(released.is_set())
         self.assertFalse(worker.is_alive())
         self.assertFalse(result)
+        self.assertEqual(errors, ["workspace_generation_stale"])
+        self.assertFalse(self.c._jobs)
+
+    def test_auth_denied_before_credentials_or_connect(self):
+        token = self.opened()
+        obj = service.WorkspaceService(self.c, service.SourceRoots({}))
+        self.grants["reader"].clear()
+        with patch.object(adapter.ssh, "connect_with_profile") as connect:
+            with self.assertRaisesRegex(pg.PersistenceError, "workspace_access_denied"):
+                obj.ssh_authenticated("reader", token, "192.168.100.10", 22,
+                                      object(), Path("known_hosts"))
+            connect.assert_not_called()
+
+    def test_cancellation_during_authentication_discards_result(self):
+        token = self.opened()
+        obj = service.WorkspaceService(self.c, service.SourceRoots({}))
+        entered, release = threading.Event(), threading.Event()
+        results, errors = [], []
+        def blocked_connect(*args, **kwargs):
+            entered.set()
+            if not release.wait(3):
+                raise RuntimeError("synthetic timeout")
+            return ({"success": True, "result": "authenticated"}, {"private": "not-published"})
+        def worker():
+            try:
+                results.append(obj.ssh_authenticated(
+                    "writer", token, "192.168.100.10", 22,
+                    object(), Path("known_hosts")))
+            except pg.PersistenceError as exc:
+                errors.append(str(exc))
+        with patch.object(adapter.ssh, "connect_with_profile", side_effect=blocked_connect):
+            thread = threading.Thread(target=worker)
+            thread.start()
+            self.assertTrue(entered.wait(3))
+            with self.assertRaisesRegex(pg.PersistenceError, "workspace_close_pending"):
+                self.c.close("writer", "A", token.generation, timeout=0)
+            release.set()
+            thread.join(3)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(results, [])
         self.assertEqual(errors, ["workspace_generation_stale"])
         self.assertFalse(self.c._jobs)
 
