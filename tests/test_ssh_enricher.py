@@ -97,6 +97,17 @@ class SafetyTests(unittest.TestCase):
         self.assertEqual(attempt["error"], "credential_provider_unavailable")
         self.assertNotIn("SECRET-MUST-NOT-LEAK", str(attempt))
 
+    def test_tofu_requires_explicit_operator_acknowledgement(self):
+        arguments = ["--profiles", "synthetic.json", "--target", "192.0.2.10",
+                     "--ack-authorized-access", "--host-key-policy", "tofu"]
+        with self.assertRaises(SystemExit) as denied:
+            mod.main(arguments)
+        self.assertEqual(denied.exception.code, 2)
+        # The acknowledge flag permits proceeding past argument validation.
+        # A missing credential-file error must occur before any SSH attempt.
+        with self.assertRaises((FileNotFoundError, OSError, ValueError, RuntimeError)):
+            mod.main(arguments + ["--ack-tofu-host-key"])
+
     def test_public_network_never_auto_scans(self):
         interfaces = [{"ifname": "wan", "ipv4": [{"address": "203.0.113.10", "prefix_length": 24}]}]
         candidates = mod.build_candidate_networks(interfaces, [])
