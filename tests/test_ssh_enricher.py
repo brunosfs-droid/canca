@@ -108,6 +108,15 @@ class SafetyTests(unittest.TestCase):
             self.assertEqual(mod.main(arguments + ["--ack-tofu-host-key"]), 2)
             provider.assert_called_once()
 
+    def test_command_exception_message_is_not_persisted(self):
+        class BrokenSSH:
+            def exec_command(self, *args, **kwargs):
+                raise RuntimeError("SECRET-DO-NOT-LOG")
+        result = mod._run_command(BrokenSSH(), "hostname", 1.0)
+        self.assertFalse(result["success"])
+        self.assertEqual(result["error"], "ssh_operation_failed")
+        self.assertNotIn("SECRET-DO-NOT-LOG", str(result))
+
     def test_public_network_never_auto_scans(self):
         interfaces = [{"ifname": "wan", "ipv4": [{"address": "203.0.113.10", "prefix_length": 24}]}]
         candidates = mod.build_candidate_networks(interfaces, [])
