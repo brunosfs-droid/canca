@@ -179,7 +179,7 @@ def _run_command(client: Any, command: str, timeout: float) -> Dict[str, Any]:
         result.update({
             "success": False,
             "error_type": type(exc).__name__,
-            "error": _safe_exception_message(exc),
+            "error": "ssh_operation_failed",
         })
 
     result["duration_ms"] = int((time.monotonic() - started) * 1000)
@@ -757,7 +757,7 @@ def connect_with_profile(
             "success": False,
             "result": "authentication_or_connection_failed",
             "error_type": type(exc).__name__,
-            "error": _safe_exception_message(exc),
+            "error": "ssh_operation_failed",
             "duration_ms": int((time.monotonic() - started) * 1000),
         })
         return attempt, None
