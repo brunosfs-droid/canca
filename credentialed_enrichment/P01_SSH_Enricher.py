@@ -609,7 +609,9 @@ def collect_read_only(client: Any, command_timeout: float) -> Dict[str, Any]:
                 "success": selected.get("success"),
                 "exit_status": selected.get("exit_status"),
                 "stdout": selected.get("stdout"),
-                "stderr": selected.get("stderr"),
+                # Raw stderr is not needed for inventory reconstruction and may carry credentials.
+                "stderr": None,
+                "stderr_present": bool(selected.get("stderr")),
                 "stdout_truncated": selected.get("stdout_truncated", False),
                 "stderr_truncated": selected.get("stderr_truncated", False),
                 "duration_ms": selected.get("duration_ms"),
