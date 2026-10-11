@@ -302,13 +302,74 @@ def _manifest_output(path, args):
     return path
 
 
+def _strict_manifest(data):
+    """Enforce one unambiguous v1 proof contract, not merely object equality."""
+    def distinct(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate member")
+            result[key] = value
+        return result
+
+    def reject_constant(_value):
+        raise ValueError("nonfinite JSON numeric value")
+
+    doc = json.loads(data.decode("utf-8"), object_pairs_hook=distinct,
+                     parse_constant=reject_constant)
+    if type(doc) is not dict or set(doc) != {"schema", "artifacts"}:
+        raise ValueError("invalid manifest envelope")
+    if doc["schema"] != SCHEMA or type(doc["artifacts"]) is not dict:
+        raise ValueError("invalid manifest schema")
+    artifacts = doc["artifacts"]
+    if set(artifacts) != {"database_dump", "roles_snapshot",
+                          "store", "configuration"}:
+        raise ValueError("invalid artifact set")
+
+    def valid_entry(value, keys):
+        if type(value) is not dict or set(value) != keys:
+            raise ValueError("invalid entry shape")
+        digest = value["sha256"]
+        if (type(digest) is not str or len(digest) != 64 or
+                any(character not in "0123456789abcdef" for character in digest)):
+            raise ValueError("invalid digest")
+        for key in keys - {"sha256"}:
+            number = value[key]
+            if type(number) is not int or number < 0:
+                raise ValueError("invalid integer field")
+        if value["bytes"] == 0:
+            raise ValueError("empty artifact")
+
+    for key in ("database_dump", "roles_snapshot"):
+        valid_entry(artifacts[key], {"sha256", "bytes"})
+    for key in ("store", "configuration"):
+        value = artifacts[key]
+        valid_entry(value, {"sha256", "files", "directories", "bytes"})
+        if value["files"] < 1 or value["files"] + value["directories"] > MAX_ENTRIES:
+            raise ValueError("invalid entry count")
+    return doc
+
+
 def _manifest_read(path):
-    size = _regular(path).st_size
-    if size > MAX_MANIFEST_BYTES:
-        raise GateError("manifest_invalid")
+    """Read a bounded, pinned, strictly parsed proof from one opened inode."""
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValueError):
+        before = _regular(path)
+        if before.st_size > MAX_MANIFEST_BYTES:
+            raise GateError("manifest_invalid")
+        with _open_source(path) as reader:
+            opened = os.fstat(reader.fileno())
+            if (not stat.S_ISREG(opened.st_mode) or
+                    _identity(opened) != _identity(before)):
+                raise GateError("manifest_invalid")
+            content = reader.read(MAX_MANIFEST_BYTES + 1)
+            if (len(content) > MAX_MANIFEST_BYTES or
+                    _identity(os.fstat(reader.fileno())) != _identity(opened)):
+                raise GateError("manifest_invalid")
+        if _identity(_regular(path)) != _identity(before):
+            raise GateError("manifest_invalid")
+        return _strict_manifest(content)
+    except (GateError, OSError, UnicodeError, ValueError, RecursionError):
+        # Do not disclose source keys, contents, paths or private values.
         raise GateError("manifest_invalid") from None
 
 
