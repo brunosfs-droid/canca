@@ -6,6 +6,7 @@ I/O boundaries, and no result escapes after a stale lease. A blocking SSH
 socket may still require its configured timeout; this is not an async kill.
 """
 import sys
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -25,9 +26,30 @@ def collect(operation, client, *, timeout=5.0):
     original = ssh.run_first_success
     def fenced_first_success(transport, family, command_timeout):
         operation.check()
-        result = original(transport, family, command_timeout)
-        operation.check()
-        return result
+        stopped = threading.Event()
+        def abort_on_cancel():
+            # An active SSH channel may be blocked in network I/O. Closing the
+            # transport wakes Paramiko; the caller still retains bounded timeouts.
+            while not stopped.is_set():
+                if operation.cancel.wait(0.02):
+                    close = getattr(transport, "close", None)
+                    if callable(close):
+                        try:
+                            close()
+                        except Exception:
+                            operation.coordinator.fail_closed()
+                    return
+        watcher = threading.Thread(target=abort_on_cancel, name="canca-r02-ssh-cancel", daemon=True)
+        watcher.start()
+        try:
+            result = original(transport, family, command_timeout)
+            operation.check()
+            return result
+        finally:
+            stopped.set()
+            watcher.join(timeout=1)
+            if watcher.is_alive():
+                operation.coordinator.fail_closed()
     # Do not monkeypatch shared SSH globals: call a scoped collector loop with
     # the same existing family parser and per-command contract.
     families = {}
