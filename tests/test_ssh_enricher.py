@@ -131,6 +131,20 @@ class SafetyTests(unittest.TestCase):
         self.assertTrue(all(row["stderr"] is None and row["stderr_present"]
                             for row in evidence["command_evidence"]))
 
+    def test_stdout_is_not_duplicated_in_persisted_command_evidence(self):
+        def fake_run(client, family, timeout):
+            return {"success": False, "result": {
+                "command": mod.SAFE_COMMAND_FAMILIES[family][0],
+                "success": False, "exit_status": 1,
+                "stdout": "PRIVATE-RAW-SSH-OUTPUT",
+                "stderr": "", "stdout_truncated": False}}
+        with patch.object(mod, "run_first_success", side_effect=fake_run):
+            evidence = mod.collect_read_only(object(), 1.0)
+        self.assertTrue(evidence["command_evidence"])
+        self.assertNotIn("PRIVATE-RAW-SSH-OUTPUT", str(evidence))
+        self.assertTrue(all(row["stdout"] is None and row["stdout_present"]
+                            for row in evidence["command_evidence"]))
+
     def test_public_network_never_auto_scans(self):
         interfaces = [{"ifname": "wan", "ipv4": [{"address": "203.0.113.10", "prefix_length": 24}]}]
         candidates = mod.build_candidate_networks(interfaces, [])

@@ -608,7 +608,9 @@ def collect_read_only(client: Any, command_timeout: float) -> Dict[str, Any]:
                 "command": selected.get("command"),
                 "success": selected.get("success"),
                 "exit_status": selected.get("exit_status"),
-                "stdout": selected.get("stdout"),
+                # Parsed identity/network fields retain assessment data; avoid duplicating raw output.
+                "stdout": None,
+                "stdout_present": bool(selected.get("stdout")),
                 # Raw stderr is not needed for inventory reconstruction and may carry credentials.
                 "stderr": None,
                 "stderr_present": bool(selected.get("stderr")),
