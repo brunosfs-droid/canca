@@ -38,6 +38,38 @@ class SSHCoordinatorTests(unittest.TestCase):
                 obj.ssh_read_only("reader", token, object())
             run.assert_not_called()
 
+    def test_cancellation_closes_blocked_ssh_transport(self):
+        token = self.opened()
+        obj = service.WorkspaceService(self.c, service.SourceRoots({}))
+        entered, released = threading.Event(), threading.Event()
+        result, errors = [], []
+        class Transport:
+            def close(self):
+                released.set()
+        transport = Transport()
+        def blocked_run(*args):
+            entered.set()
+            if not released.wait(3):
+                raise RuntimeError("transport was not closed on cancellation")
+            return {"success": False, "selected_command": None}
+        def work():
+            try:
+                result.append(obj.ssh_read_only("writer", token, transport))
+            except pg.PersistenceError as exc:
+                errors.append(str(exc))
+        with patch.object(adapter.ssh, "run_first_success", side_effect=blocked_run):
+            worker = threading.Thread(target=work)
+            worker.start()
+            self.assertTrue(entered.wait(3))
+            with self.assertRaisesRegex(pg.PersistenceError, "workspace_close_pending"):
+                self.c.close("writer", "A", token.generation, timeout=0)
+            worker.join(3)
+        self.assertTrue(released.is_set())
+        self.assertFalse(worker.is_alive())
+        self.assertFalse(result)
+        self.assertEqual(errors, ["workspace_generation_stale"])
+        self.assertFalse(self.c._jobs)
+
     def test_close_during_ssh_io_drops_result_before_publication(self):
         token = self.opened()
         obj = service.WorkspaceService(self.c, service.SourceRoots({}))
