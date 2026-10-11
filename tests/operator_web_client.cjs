@@ -75,7 +75,7 @@ async function read(c, doc = report()) {
 function archive(overrides = {}) {
   const bytes = Buffer.from('synthetic binary archive for event-level checks');
   const headers = {'Content-Length':String(bytes.length), 'Content-Type':'application/zip',
-    'Content-Disposition':'attachment; filename="canca-LAB-001-report.zip"',
+    'Content-Disposition':'attachment; filename="canca-report.zip"',
     'X-Canca-Report-Scope-SHA256':'a'.repeat(64), 'X-Canca-Export-SHA256':createHash('sha256').update(bytes).digest('hex'), ...overrides};
   return {ok:true,status:200,headers:{get:key=>headers[key]??null},
     body:new ReadableStream({start(controller) {controller.enqueue(bytes); controller.close();}})};
@@ -213,7 +213,7 @@ function previewResponse(doc = previewDoc(), overrides = {}) {
   assert.equal(exported.pathname,'/api/v1/assessments/LAB-001/report/export');
   assert.equal(exported.searchParams.get('expected_scope_sha256'),'a'.repeat(64));
   assert.equal(exported.searchParams.has('after_ordinal'),false); assert.equal(exported.searchParams.has('limit'),false);
-  assert.equal(c.saved.length,1); assert.equal(c.saved[0].filename,'canca-LAB-001-report.zip');
+  assert.equal(c.saved.length,1); assert.equal(c.saved[0].filename,'canca-report.zip');
   assert.equal(c.element('download-button').focused,true); assert.equal(c.urls.size,1);
   c.replies.push(response(200,{status:'logged_out'})); await c.element('logout-button').fire('click');
   assert.equal(c.urls.size,0);
@@ -237,8 +237,8 @@ function previewResponse(doc = previewDoc(), overrides = {}) {
   assert.equal(executiveRequest.searchParams.get('expected_scope_sha256'),'a'.repeat(64));
   assert.equal(executiveRequest.searchParams.has('limit'),false); assert.equal(executiveRequest.searchParams.has('after_ordinal'),false);
   const callCount=c.calls.length; await c.element('download-button').fire('click'); assert.equal(c.calls.length,callCount);
-  executiveRelease(archive({'Content-Disposition':'attachment; filename="canca-LAB-001-executive.zip"'})); await executivePending;
-  assert.equal(c.saved[0].filename,'canca-LAB-001-executive.zip'); assert.equal(c.element('executive-download-button').focused,true);
+  executiveRelease(archive({'Content-Disposition':'attachment; filename="canca-executive.zip"'})); await executivePending;
+  assert.equal(c.saved[0].filename,'canca-executive.zip'); assert.equal(c.element('executive-download-button').focused,true);
   assert.equal(c.element('download-button').disabled,false); assert.equal(c.element('executive-download-button').disabled,false);
   assert.match(c.element('message').textContent,/executivo preparado/);
   // A technical attachment cannot masquerade as executive; recoverable errors preserve the page.
@@ -263,7 +263,7 @@ function previewResponse(doc = previewDoc(), overrides = {}) {
     if (expiry) [...c.timers.values()].find(x=>x.delay===900000).handler();
     else {c.replies.push(response(200,{status:'logged_out'})); await c.element('logout-button').fire('click');}
     assert.equal(signal.aborted,true); release(archive(button==='executive-download-button' ?
-      {'Content-Disposition':'attachment; filename="canca-LAB-001-executive.zip"'} : {})); await downloading;
+      {'Content-Disposition':'attachment; filename="canca-executive.zip"'} : {})); await downloading;
     assert.equal(c.saved.length,0); assert.equal(c.urls.size,0); assert.equal(c.element('workspace').hidden,true);
   }
   // Executive preview uses the displayed scope and only text; hide clears its data.
