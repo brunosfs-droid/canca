@@ -930,3 +930,8 @@ em v0.6.27; R06 ainda depende de migração, readers/reports, audit e gates oper
 
 - [Contrato R06](validation/ALPHA_R06_DESCRIPTOR_TREE_WALK_v0.6.95.md): impede leitura fora das árvores de store/config por troca de symlinks em Linux/POSIX, verifica identidades antes/depois e preserva digest v1 do manifesto.
 - v0.6.94 integrada pelo PR #205; EVE-NG E0 e restore cross-cluster real R06 permanecem NO-GO.
+
+## v0.6.96 — leitura estrita e segura de manifestos R06 (CANDIDATE)
+
+- [Contrato e regressões](validation/ALPHA_R06_STRICT_MANIFEST_READER_v0.6.96.md): validação JSON sem chaves duplicadas ou NaN, campos fixados, tamanhos limitados e abertura protegida do manifesto contra symlink/TOCTOU no POSIX.
+- v0.6.95 integrada via PR #206 no repositório `brunosfs-droid/canca`. E0/EVE-NG, R02/T14 e R06 cross-cluster continuam pendentes.
