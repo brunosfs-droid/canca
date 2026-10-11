@@ -57,7 +57,7 @@ class PostgreSQLOperatorExecutiveTests(unittest.TestCase):
             with patch.object(pg,'open_connection',side_effect=reader):
                 status,headers,raw=request('GET',target+scope+'&limit=1',token=token)
                 self.assertEqual(status,200); self.assertEqual(headers['X-Canca-Export-SHA256'],pg.digest(raw))
-                self.assertEqual(headers['Content-Disposition'],'attachment; filename="canca-'+assessment+'-executive.zip"')
+                self.assertEqual(headers['Content-Disposition'],'attachment; filename="canca-executive.zip"')
                 self.assertEqual(headers['X-Canca-Report-Scope-SHA256'],scope)
                 with zipfile.ZipFile(io.BytesIO(raw)) as archive:
                     actual=json.loads(archive.read('executive.json'))

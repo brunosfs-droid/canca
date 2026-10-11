@@ -35,7 +35,7 @@ class OperatorWebExportTests(unittest.TestCase):
             code, headers, raw = self.request('GET', self.target(), headers={'Authorization':'Bearer '+token})
         self.assertEqual(code, 200)
         self.assertEqual(headers['Content-Type'], 'application/zip')
-        self.assertEqual(headers['Content-Disposition'], 'attachment; filename="canca-LAB-001-report.zip"')
+        self.assertEqual(headers['Content-Disposition'], 'attachment; filename="canca-report.zip"')
         self.assertEqual(headers['X-Canca-Export-SHA256'], export.pg.digest(raw))
         self.assertEqual(headers['X-Canca-Report-Scope-SHA256'], '3'*64)
         self.assertEqual(int(headers['Content-Length']), len(raw))

@@ -64,7 +64,7 @@ class OperatorWebExecutiveTests(unittest.TestCase):
         with patch.object(export.pg,'open_connection'), patch.object(export.report,'show_assessment',side_effect=canonical_page) as query:
             code, headers, raw=self.request('GET',self.target(),headers={'Authorization':'Bearer '+token})
         self.assertEqual(code,200)
-        self.assertEqual(headers['Content-Disposition'],'attachment; filename="canca-LAB-001-executive.zip"')
+        self.assertEqual(headers['Content-Disposition'],'attachment; filename="canca-executive.zip"')
         self.assertEqual(headers['Content-Type'],'application/zip'); self.assertEqual(int(headers['Content-Length']),len(raw))
         self.assertEqual(headers['X-Canca-Report-Scope-SHA256'],'d'*64)
         self.assertEqual(headers['X-Canca-Export-SHA256'],export.pg.digest(raw))

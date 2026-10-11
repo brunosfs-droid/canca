@@ -20,6 +20,16 @@ DIRECTORY_VERSION = '0.6.16'
 MAX_DIRECTORY_BYTES = 32768
 PREVIEW_PATH = re.compile(r'/api/v1/assessments/([A-Za-z0-9][A-Za-z0-9._-]{0,127})/report/executive')
 EXPORT_PATH = re.compile(r'/api/v1/assessments/([A-Za-z0-9][A-Za-z0-9._-]{0,127})/report/(executive/)?export')
+def safe_export_filename(assessment: str, kind: str) -> str:
+    """Build a download filename from a strictly bounded ASCII identifier."""
+    if not isinstance(assessment, str) or re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}', assessment) is None:
+        raise ValueError('invalid assessment identifier')
+    if kind not in ('technical', 'executive'):
+        raise ValueError('invalid export kind')
+    # The HTTP header must not depend on request-derived assessment identifiers.
+    return 'canca-executive.zip' if kind == 'executive' else 'canca-report.zip'
+
+
 ASSETS = {'/': ('index.html', 'text/html; charset=utf-8'),
           '/assets/operator.css': ('operator.css', 'text/css; charset=utf-8'),
           '/assets/operator.js': ('operator.js', 'text/javascript; charset=utf-8')}
@@ -135,8 +145,8 @@ class WebHandler(api.OperatorHandler):
                     raise api.AccessError('report_input_invalid', 400) from None
                 with self.server.report_exports.build(token, assessment, scope, limit, kind=kind) as (raw, checksum):
                     self.send_response(200)
-                    suffix = '-executive.zip' if kind == 'executive' else '-report.zip'
-                    self.send_header('Content-Disposition', 'attachment; filename="canca-' + assessment + suffix + '"')
+                    filename = safe_export_filename(assessment, kind)
+                    self.send_header('Content-Disposition', 'attachment; filename="' + filename + '"')
                     self.send_header('X-Canca-Report-Scope-SHA256', scope)
                     self.send_header('X-Canca-Export-SHA256', checksum)
                     self._asset_headers(raw, 'application/zip')
