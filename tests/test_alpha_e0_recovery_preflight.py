@@ -310,6 +310,120 @@ class E0RecoveryArtifactTests(unittest.TestCase):
         self.assertEqual(process.returncode, 2)
         self.assertEqual(result["reason"], "manifest_invalid")
 
+    def test_manifest_rejects_duplicate_envelope_and_nested_members(self):
+        self.capture()
+        baseline = self.output.read_text(encoding="utf-8")
+        variants = (
+            '{"schema":"fake","schema":' + baseline.split('"schema":', 1)[1],
+            baseline.replace('"bytes":', '"bytes":0,"bytes":', 1),
+        )
+        for candidate in variants:
+            with self.subTest(candidate=candidate[:42]):
+                self.output.write_text(candidate, encoding="utf-8")
+                proc, result = self.run_gate("verify")
+                self.assertEqual(proc.returncode, 2)
+                self.assertEqual(result["reason"], "manifest_invalid")
+        self.output.write_text(baseline, encoding="utf-8")
+        self.assertEqual(self.run_gate("verify")[0].returncode, 0)
+
+    def test_manifest_rejects_nonfinite_numbers_and_ambiguous_numeric_types(self):
+        self.capture()
+        baseline = self.output.read_text(encoding="utf-8")
+        for bad in ("NaN", "Infinity", "-Infinity", "true", "1.5"):
+            with self.subTest(bad=bad):
+                self.output.write_text(
+                    baseline.replace('"bytes":', '"bytes":' + bad + ',"old_bytes":', 1)
+                    .replace(',"old_bytes":', ',"old_bytes":', 1),
+                    encoding="utf-8",
+                )
+                proc, result = self.run_gate("verify")
+                self.assertEqual(proc.returncode, 2)
+                self.assertEqual(result["reason"], "manifest_invalid")
+
+    def test_manifest_rejects_wrong_fields_negative_counts_and_extra_keys(self):
+        self.capture()
+        baseline = json.loads(self.output.read_text(encoding="utf-8"))
+        variants = []
+        doc = json.loads(json.dumps(baseline))
+        doc["artifacts"]["store"]["files"] = -1
+        variants.append(doc)
+        doc = json.loads(json.dumps(baseline))
+        doc["artifacts"]["store"]["files"] = True
+        variants.append(doc)
+        doc = json.loads(json.dumps(baseline))
+        doc["artifacts"]["database_dump"]["extra_private_info"] = "SECRET-MUST-NOT-LOG"
+        variants.append(doc)
+        doc = json.loads(json.dumps(baseline))
+        doc["artifact_paths"] = ["/restricted/private"]
+        variants.append(doc)
+        doc = json.loads(json.dumps(baseline))
+        del doc["artifacts"]["roles_snapshot"]["bytes"]
+        variants.append(doc)
+        for candidate in variants:
+            with self.subTest(manifest=candidate):
+                self.output.write_text(json.dumps(candidate), encoding="utf-8")
+                proc, result = self.run_gate("verify")
+                self.assertEqual(proc.returncode, 2)
+                self.assertEqual(result["reason"], "manifest_invalid")
+                self.assertNotIn("SECRET-MUST-NOT-LOG", proc.stdout + proc.stderr)
+
+    def test_manifest_size_limit_applies_before_json_decode(self):
+        self.capture()
+        self.output.write_bytes(b" " * (gate.MAX_MANIFEST_BYTES + 1))
+        proc, result = self.run_gate("verify")
+        self.assertEqual(proc.returncode, 2)
+        self.assertEqual(result["reason"], "manifest_invalid")
+
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW") and
+                         os.open in os.supports_dir_fd,
+                         "POSIX descriptor traversal required")
+    def test_manifest_file_and_ancestor_symlinks_are_rejected(self):
+        self.capture()
+        saved = self.root / "original-proof.json"
+        self.output.rename(saved)
+        self.output.symlink_to(saved)
+        try:
+            proc, result = self.run_gate("verify")
+            self.assertEqual(proc.returncode, 2)
+            self.assertEqual(result["reason"], "manifest_invalid")
+        finally:
+            self.output.unlink()
+            saved.rename(self.output)
+        directory = self.root / "safe-proof-parent"
+        directory.mkdir()
+        (directory / "proof.json").write_bytes(self.output.read_bytes())
+        alias = self.root / "alias-proof-parent"
+        alias.symlink_to(directory, target_is_directory=True)
+        proc, result = self.run_gate("verify", manifest=alias / "proof.json")
+        self.assertEqual(proc.returncode, 2)
+        self.assertEqual(result["reason"], "manifest_invalid")
+
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "O_NOFOLLOW") and
+                         os.open in os.supports_dir_fd,
+                         "POSIX descriptor traversal required")
+    def test_manifest_lstat_open_swap_is_rejected_without_reading_symlink(self):
+        self.capture()
+        original_regular = gate._regular
+        original = self.root / "proof.original"
+        private_target = self.root / "PRIVATE-PROOF-DATA"
+        private_target.write_bytes(b"SECRET-DO-NOT-READ-MANIFEST")
+        swapped = False
+
+        def replace_proof(path):
+            nonlocal swapped
+            info = original_regular(path)
+            if path == self.output and not swapped:
+                swapped = True
+                path.rename(original)
+                path.symlink_to(private_target)
+            return info
+
+        with patch.object(gate, "_regular", side_effect=replace_proof):
+            with self.assertRaisesRegex(gate.GateError, "manifest_invalid"):
+                gate._manifest_read(self.output)
+        self.assertTrue(swapped)
+        self.assertEqual(private_target.read_bytes(), b"SECRET-DO-NOT-READ-MANIFEST")
+
     def test_nonprivate_manifest_directory_is_rejected(self):
         self.root.chmod(0o755)
         process, result = self.run_gate("capture")
