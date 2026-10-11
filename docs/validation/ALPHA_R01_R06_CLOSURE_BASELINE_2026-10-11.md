@@ -33,7 +33,7 @@ O registro `docs/validation/E0_EVIDENCE_REGISTER_v0.6.81.md` indica **E0-01..E0-
 
 ## Segurança do repositório público
 
-PR #207 (`security/public-repository-hygiene`) permanece separada: oito workflows concluídos SUCCESS no seu HEAD, mas GitHub informa `mergeable=false` contra a main após PR #208; resolver conflito preservando ambas as mudanças, atualizar branch e validar novamente antes de merge. Sanitização atual não remove, por si só, dados de histórico Git anterior: revisar necessidade de limpeza de histórico/rotação de segredos por processo próprio.
+PR #207 (`security/public-repository-hygiene`) foi integrada à `main` em 2026-10-11 pelo squash commit `efe7bdad517c2819ee28d72a2592baba87df2166` com 22 checks aprovados. A sanitização do HEAD não remove, por si só, dados históricos do Git: avaliar eventuais segredos expostos e rotação/limpeza de histórico em procedimento separado. Alertas de CodeQL devem ser tratados em hardening específico, sem confundi-los com o fechamento R01–R06.
 
 ## Estado da auditoria
 
