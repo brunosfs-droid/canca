@@ -678,7 +678,8 @@ def connect_with_profile(
     except Exception as exc:
         attempt["result"] = "secret_resolution_failed"
         attempt["error_type"] = type(exc).__name__
-        attempt["error"] = _safe_exception_message(exc)
+        # Provider exceptions can echo credentials or sensitive account details.
+        attempt["error"] = "credential_provider_unavailable"
         return attempt, None
 
     client = prepare_ssh_client(known_hosts, host_key_policy)
