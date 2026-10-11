@@ -314,7 +314,7 @@ class E0RecoveryArtifactTests(unittest.TestCase):
         self.capture()
         baseline = self.output.read_text(encoding="utf-8")
         variants = (
-            '{"schema":"fake","schema":' + baseline.split('"schema":', 1)[1],
+            baseline.replace('"schema":', '"schema":"not-the-approved-schema","schema":', 1),
             baseline.replace('"bytes":', '"bytes":0,"bytes":', 1),
         )
         for candidate in variants:
@@ -331,11 +331,10 @@ class E0RecoveryArtifactTests(unittest.TestCase):
         baseline = self.output.read_text(encoding="utf-8")
         for bad in ("NaN", "Infinity", "-Infinity", "true", "1.5"):
             with self.subTest(bad=bad):
-                self.output.write_text(
-                    baseline.replace('"bytes":', '"bytes":' + bad + ',"old_bytes":', 1)
-                    .replace(',"old_bytes":', ',"old_bytes":', 1),
-                    encoding="utf-8",
-                )
+                prefix, remainder = baseline.split('"bytes":', 1)
+                _, suffix = remainder.split(",", 1)
+                candidate = prefix + '"bytes":' + bad + "," + suffix
+                self.output.write_text(candidate, encoding="utf-8")
                 proc, result = self.run_gate("verify")
                 self.assertEqual(proc.returncode, 2)
                 self.assertEqual(result["reason"], "manifest_invalid")
