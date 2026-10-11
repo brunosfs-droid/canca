@@ -26,10 +26,8 @@ def safe_export_filename(assessment: str, kind: str) -> str:
         raise ValueError('invalid assessment identifier')
     if kind not in ('technical', 'executive'):
         raise ValueError('invalid export kind')
-    # Reconstruct only characters from the explicitly permitted alphabet.
-    safe_id = ''.join(ch for ch in assessment if ch.isascii() and (ch.isalnum() or ch in '._-'))
-    suffix = '-executive.zip' if kind == 'executive' else '-report.zip'
-    return 'canca-' + safe_id + suffix
+    # The HTTP header must not depend on request-derived assessment identifiers.
+    return 'canca-executive.zip' if kind == 'executive' else 'canca-report.zip'
 
 
 ASSETS = {'/': ('index.html', 'text/html; charset=utf-8'),
