@@ -207,3 +207,5 @@ restore same-cluster/roles existentes não qualifica recuperação cross-cluster
 [v0.6.94 — acesso seguro ao preflight R06](validation/ALPHA_R06_PREFLIGHT_TOCTOU_v0.6.94.md): bloqueia travessia por symlink e corridas lstat/open no POSIX, com comparações de fstat antes/depois. v0.6.93 integrada pelo PR #204, CI de agendamento Windows apresentou intermitência e foi aprovado no retry. R06 real/E0 seguem NO-GO.
 
 [v0.6.95 — R06 traversal protegido](validation/ALPHA_R06_DESCRIPTOR_TREE_WALK_v0.6.95.md): varredura e hash de árvores por O_NOFOLLOW/dir_fd em POSIX, com testes de trocas de links e mutação durante a enumeração; preserva manifesto v1. v0.6.94 integrada via PR #205. Homologação E0/R06 pendente.
+
+[v0.6.96 — manifesto de recuperação R06 estrito](validation/ALPHA_R06_STRICT_MANIFEST_READER_v0.6.96.md): fixa esquema de prova, rejeita JSON ambíguo e arquivos substituídos, valida SHA-256/contagens e impede acesso fora do manifesto em POSIX. v0.6.95 integrada por PR #206; R06 operacional/E0 seguem NO-GO.
