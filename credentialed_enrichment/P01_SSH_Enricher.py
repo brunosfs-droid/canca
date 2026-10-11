@@ -796,7 +796,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--max-candidates", type=int, default=2, help="Maximum matching credential profiles to try (1-3).")
     parser.add_argument("--connect-timeout", type=float, default=5.0)
     parser.add_argument("--command-timeout", type=float, default=8.0)
-    parser.add_argument("--host-key-policy", choices=["tofu", "strict"], default="tofu")
+    parser.add_argument("--host-key-policy", choices=["tofu", "strict"], default="strict")
+    parser.add_argument("--ack-tofu-host-key", action="store_true", help="Explicitly authorize first-use trust for unknown SSH host keys (lab only).")
     parser.add_argument("--known-hosts", default=str(Path.home() / ".orizonit" / "p01" / "known_hosts"))
     parser.add_argument("--auth-only", action="store_true", help="Authenticate only; do not execute read-only enrichment commands.")
     parser.add_argument("--output-dir", default="./output")
@@ -806,6 +807,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if not args.ack_authorized_access:
         parser.error("--ack-authorized-access is required.")
+    if args.host_key_policy == "tofu" and not args.ack_tofu_host_key:
+        parser.error("TOFU requires explicit --ack-tofu-host-key; verify the host fingerprint out-of-band.")
     try:
         target = ipaddress.ip_address(args.target)
     except ValueError:
