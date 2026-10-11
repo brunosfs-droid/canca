@@ -46,6 +46,21 @@ class ManifestTests(unittest.TestCase):
         self.assertTrue(result["valid"], result["errors"])
         self.assertEqual(result["domain_count"], 1)
 
+    def test_invalid_scope_values_are_redacted(self):
+        for field in ("authorized_scopes", "exclude_scopes"):
+            bad = dict(self.manifest)
+            bad[field] = ["SECRET-PRIVATE-SCOPE"]
+            result = assessment.validate_manifest(bad)
+            self.assertFalse(result["valid"])
+            self.assertNotIn("SECRET-PRIVATE-SCOPE", str(result["errors"]))
+
+    def test_duplicate_domain_value_is_redacted(self):
+        bad = dict(self.manifest)
+        bad["domains"] = [dict(self.manifest["domains"][0])] * 2
+        result = assessment.validate_manifest(bad)
+        self.assertFalse(result["valid"])
+        self.assertNotIn("p01.lab.test", str(result["errors"]))
+
     def test_manifest_rejects_plaintext_secret(self):
         bad = dict(self.manifest)
         bad["password"] = "should-not-be-here"
