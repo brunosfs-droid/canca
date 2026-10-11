@@ -135,7 +135,7 @@ def validate_manifest(doc: Mapping[str, Any]) -> Dict[str, Any]:
             elif net.prefixlen < 16:
                 warnings.append(f"broad authorized scope declared: {net}")
         except Exception as exc:
-            errors.append(f"invalid authorized scope {raw!r}: {exc}")
+            errors.append("invalid authorized scope (value redacted)")
 
     excludes = doc.get("exclude_scopes", [])
     if not isinstance(excludes, list):
@@ -145,7 +145,7 @@ def validate_manifest(doc: Mapping[str, Any]) -> Dict[str, Any]:
         try:
             _parse_ipv4_network(str(raw))
         except Exception as exc:
-            errors.append(f"invalid exclude scope {raw!r}: {exc}")
+            errors.append("invalid exclude scope (value redacted)")
 
     domains = doc.get("domains", [])
     if not isinstance(domains, list):
@@ -164,7 +164,7 @@ def validate_manifest(doc: Mapping[str, Any]) -> Dict[str, Any]:
         if not dns:
             errors.append(f"{base}.dns_domain is required")
         elif dns in seen_dns:
-            errors.append(f"duplicate dns_domain: {dns}")
+            errors.append("duplicate dns_domain (value redacted)" )
         else:
             seen_dns.add(dns)
         if not netbios:
@@ -180,7 +180,7 @@ def validate_manifest(doc: Mapping[str, Any]) -> Dict[str, Any]:
                 if authorized_nets and not any(net.subnet_of(a) or net == a for a in authorized_nets):
                     warnings.append(f"{base} scope {net} is outside declared authorized_scopes")
             except Exception as exc:
-                errors.append(f"{base}.scopes contains invalid network {raw!r}: {exc}")
+                errors.append(f"{base}.scopes contains invalid network (value redacted)")
 
     allowed = doc.get("allowed_protocols", [])
     if not isinstance(allowed, list) or not all(isinstance(x, str) and x.strip() for x in allowed):
