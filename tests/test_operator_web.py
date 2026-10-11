@@ -33,6 +33,15 @@ class OperatorWebTests(unittest.TestCase):
             self.assertIsNone(response.getheader('Set-Cookie'))
             return response.status, dict(response.getheaders()), raw
 
+    def test_export_filename_rejects_header_injection(self):
+        self.assertEqual(web.safe_export_filename('LAB-001', 'technical'), 'canca-LAB-001-report.zip')
+        self.assertEqual(web.safe_export_filename('LAB_002', 'executive'), 'canca-LAB_002-executive.zip')
+        for invalid in ('', '../escape', 'LAB\\r\\nInjected: yes', 'LAB"quote', 'é', 'A' * 129):
+            with self.subTest(value=invalid), self.assertRaises(ValueError):
+                web.safe_export_filename(invalid, 'technical')
+        with self.assertRaises(ValueError):
+            web.safe_export_filename('LAB-001', 'unknown')
+
     def test_fixed_assets_csp_and_health_without_database(self):
         with patch.object(web.api.report.pg, 'open_connection') as connect:
             for path, content_type in [('/', 'text/html'), ('/assets/operator.js', 'text/javascript'), ('/assets/operator.css', 'text/css')]:
