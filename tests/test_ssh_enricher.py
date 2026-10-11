@@ -103,10 +103,10 @@ class SafetyTests(unittest.TestCase):
         with self.assertRaises(SystemExit) as denied:
             mod.main(arguments)
         self.assertEqual(denied.exception.code, 2)
-        # The acknowledge flag permits proceeding past argument validation.
-        # A missing credential-file error must occur before any SSH attempt.
-        with self.assertRaises((FileNotFoundError, OSError, ValueError, RuntimeError)):
-            mod.main(arguments + ["--ack-tofu-host-key"])
+        # With explicit acknowledgement, argument validation allows provider setup.
+        with patch.object(mod, "_credential_api", side_effect=RuntimeError("synthetic provider unavailable")) as provider:
+            self.assertEqual(mod.main(arguments + ["--ack-tofu-host-key"]), 2)
+            provider.assert_called_once()
 
     def test_public_network_never_auto_scans(self):
         interfaces = [{"ifname": "wan", "ipv4": [{"address": "203.0.113.10", "prefix_length": 24}]}]
