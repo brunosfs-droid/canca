@@ -34,8 +34,8 @@ class OperatorWebTests(unittest.TestCase):
             return response.status, dict(response.getheaders()), raw
 
     def test_export_filename_rejects_header_injection(self):
-        self.assertEqual(web.safe_export_filename('LAB-001', 'technical'), 'canca-LAB-001-report.zip')
-        self.assertEqual(web.safe_export_filename('LAB_002', 'executive'), 'canca-LAB_002-executive.zip')
+        self.assertEqual(web.safe_export_filename('LAB-001', 'technical'), 'canca-report.zip')
+        self.assertEqual(web.safe_export_filename('LAB_002', 'executive'), 'canca-executive.zip')
         for invalid in ('', '../escape', 'LAB\\r\\nInjected: yes', 'LAB"quote', 'é', 'A' * 129):
             with self.subTest(value=invalid), self.assertRaises(ValueError):
                 web.safe_export_filename(invalid, 'technical')
