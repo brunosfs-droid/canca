@@ -170,6 +170,15 @@ class WorkspaceService:
     def scan_intent_history(self,actor,token,intent_id):
         return self._call(actor,token,'workspace:read',intent_ledger.history,intent_id)
 
+    def ssh_read_only(self,actor,token,client,*,timeout=5.0):
+        """Trusted internal SSH adapter; caller owns authenticated transport."""
+        import P01_Workspace_SSH_Adapter as ssh_adapter
+        with self.coordinator.borrow(actor,token,'workspace:read') as operation:
+            operation.check()
+            result=ssh_adapter.collect(operation,client,timeout=timeout)
+            operation.check()
+            return result
+
     def legacy_checkpoint(self,actor,token,*,timeout=10):
         # Only the trusted, offline status command is allowed in v0.6.39.
         with self.coordinator.borrow(actor,token,'workspace:read') as operation:
