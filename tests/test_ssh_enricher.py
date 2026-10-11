@@ -1,6 +1,8 @@
 import importlib.util
 import pathlib
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 MODULE_PATH = pathlib.Path(__file__).resolve().parents[1] / "credentialed_enrichment" / "P01_SSH_Enricher.py"
 spec = importlib.util.spec_from_file_location("p01_ssh_enricher", MODULE_PATH)
@@ -78,6 +80,22 @@ class SafetyTests(unittest.TestCase):
         value = mod._safe_exception_message(Exception("password=secret123 failed"))
         self.assertNotIn("secret123", value)
         self.assertIn("<redacted>", value)
+
+    def test_secret_resolution_error_never_echoes_provider_exception(self):
+        match = SimpleNamespace(
+            profile={"id": "synthetic", "username": "tester", "auth_type": "password",
+                     "secret_refs": {"password": "env://SYNTHETIC"}},
+            matched_scope="192.0.2.0/24", prefix_length=24)
+        provider = SimpleNamespace(resolve_secret=lambda *args, **kwargs:
+                                   (_ for _ in ()).throw(RuntimeError("token=SECRET-MUST-NOT-LEAK")))
+        with patch.object(mod, "paramiko", object()), patch.object(mod, "_credential_api", return_value=provider):
+            attempt, result = mod.connect_with_profile(
+                "192.0.2.1", 22, match, pathlib.Path("unused_known_hosts"),
+                "strict", 1.0, 1.0, False)
+        self.assertIsNone(result)
+        self.assertEqual(attempt["result"], "secret_resolution_failed")
+        self.assertEqual(attempt["error"], "credential_provider_unavailable")
+        self.assertNotIn("SECRET-MUST-NOT-LEAK", str(attempt))
 
     def test_public_network_never_auto_scans(self):
         interfaces = [{"ifname": "wan", "ipv4": [{"address": "203.0.113.10", "prefix_length": 24}]}]
