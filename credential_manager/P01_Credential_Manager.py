@@ -777,7 +777,18 @@ def cli(argv: Optional[Sequence[str]] = None) -> int:
             name: secret_ref_status(ref)
             for name, ref in (profile.get("secret_refs") or {}).items()
         }
-        print(json.dumps({"profile_id": args.profile_id, "secrets": statuses}, indent=2, ensure_ascii=False))
+        # Provider locators and usernames are sensitive operational metadata.
+        # Emit only bounded availability diagnostics, never provider identifiers.
+        public_statuses = {
+            name: {
+                "scheme": status.get("scheme"),
+                "available": bool(status.get("available")),
+                **({"interactive": True} if status.get("interactive") else {}),
+                **({"error": status["error"]} if status.get("error") else {}),
+            }
+            for name, status in statuses.items()
+        }
+        print(json.dumps({"profile_id": args.profile_id, "secrets": public_statuses}, indent=2, ensure_ascii=False))
         return 0 if all(v.get("available") for v in statuses.values()) else 3
 
     if args.command == "store-wincred":
