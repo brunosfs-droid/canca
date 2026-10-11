@@ -1,4 +1,8 @@
 import importlib.util
+import contextlib
+import io
+import json
+from unittest.mock import patch
 import pathlib
 import unittest
 
@@ -207,6 +211,20 @@ class SecretRefTests(unittest.TestCase):
         status = mod.secret_ref_status("prompt://demo")
         self.assertTrue(status["available"])
         self.assertTrue(status["interactive"])
+
+    def test_check_cli_never_prints_secret_locator_or_username(self):
+        document = {"profiles": [{"id": "lab", "secret_refs": {"password": "wincred://PRIVATE-TARGET"}}]}
+        status = {"scheme": "wincred", "locator": "PRIVATE-TARGET", "available": True, "username": "PRIVATE-USER"}
+        output = io.StringIO()
+        with patch.object(mod, "load_profiles", return_value=document), \
+                patch.object(mod, "secret_ref_status", return_value=status), \
+                contextlib.redirect_stdout(output):
+            result = mod.cli(["check", "--profiles", "ignored.json", "--profile-id", "lab"])
+        self.assertEqual(result, 0)
+        self.assertNotIn("PRIVATE-TARGET", output.getvalue())
+        self.assertNotIn("PRIVATE-USER", output.getvalue())
+        self.assertEqual(json.loads(output.getvalue())["secrets"]["password"],
+                         {"scheme": "wincred", "available": True})
 
     def test_unsupported_scheme_rejected(self):
         with self.assertRaises(mod.CredentialConfigError):
