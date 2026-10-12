@@ -6,12 +6,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from types import SimpleNamespace
-from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
 import P01_Workspace_Service as service
 import P01_Workspace_SSH_Adapter as adapter
 import test_workspace_coordinator as fixtures
+import test_evidence_bundle as evidence_fixtures
 
 pg = service.pg
 
@@ -53,6 +53,33 @@ class SSHCoordinatorTests(unittest.TestCase):
                     with self.assertRaisesRegex(pg.PersistenceError, "workspace_generation_stale"):
                         adapter.export_verified_ssh_evidence(op, directory, "lab", {"a": 1})
                 self.assertEqual(list(Path(directory).iterdir()), [])
+
+
+    def test_real_bundle_packaging_and_tamper_rejection(self):
+        token = self.opened()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            network, targets, manifest, _ = evidence_fixtures.EvidenceBundleTests()._inputs(root)
+            dest = root / "official.p01bundle"
+            with self.c.borrow("writer", token, "workspace:write") as operation:
+                receipt = adapter.package_verified_ssh_bundle(
+                    operation, dest, "LAB-001", "RUN-001", "NODE-01",
+                    network, targets, manifest)
+            import P01_Evidence_Bundle as official
+            validation = official.validate_bundle(dest)
+            self.assertTrue(validation["valid"])
+            self.assertTrue(validation["outer_sha256_verified"])
+            self.assertEqual(receipt["bundle_id"], validation["bundle_id"])
+            self.assertEqual(receipt["artifact_count"], 3)
+            targets[0].write_text('{"tampered":true}', encoding="utf-8")
+            rejected = root / "rejected.p01bundle"
+            with self.c.borrow("writer", token, "workspace:write") as operation:
+                with self.assertRaises(ValueError):
+                    adapter.package_verified_ssh_bundle(
+                        operation, rejected, "LAB-001", "RUN-001", "NODE-01",
+                        network, targets, manifest)
+            self.assertFalse(rejected.exists())
+            self.assertFalse(rejected.with_suffix(".p01bundle.sha256").exists())
 
     def test_official_bundle_staging_publishes_only_after_validation(self):
         token = self.opened()
