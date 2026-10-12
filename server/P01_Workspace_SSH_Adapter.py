@@ -123,7 +123,7 @@ def export_verified_ssh_evidence(operation, output_dir, run_label, payload):
     destination = output_dir / name
     pg.require(not destination.exists() and not destination.is_symlink(), "workspace_input_invalid")
     staging = None
-    published = False
+    claimed = False
     try:
         with tempfile.NamedTemporaryFile(dir=output_dir, prefix=".canca-ssh-", suffix=".tmp",
                                          delete=False) as temp:
@@ -136,19 +136,19 @@ def export_verified_ssh_evidence(operation, output_dir, run_label, payload):
         operation.check()
         # Exclusive creation prevents replacing an existing evidence artifact.
         with destination.open("xb") as final:
+            claimed = True
             if os.name != "nt":
                 os.chmod(destination, 0o600)
             final.write(staging.read_bytes())
             final.flush()
             os.fsync(final.fileno())
-        published = True
         operation.check()
         return {"workspace_id": operation.token.workspace_id,
                 "generation": operation.token.generation,
                 "filename": name, "sha256": hashlib.sha256(raw).hexdigest(),
                 "bundle_created": False}
     except BaseException:
-        if published or destination.exists():
+        if claimed:
             destination.unlink(missing_ok=True)
         raise
     finally:
