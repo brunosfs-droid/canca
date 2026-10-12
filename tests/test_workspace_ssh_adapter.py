@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from types import SimpleNamespace
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
 import P01_Workspace_Service as service
@@ -52,6 +53,54 @@ class SSHCoordinatorTests(unittest.TestCase):
                     with self.assertRaisesRegex(pg.PersistenceError, "workspace_generation_stale"):
                         adapter.export_verified_ssh_evidence(op, directory, "lab", {"a": 1})
                 self.assertEqual(list(Path(directory).iterdir()), [])
+
+    def test_official_bundle_staging_publishes_only_after_validation(self):
+        token = self.opened()
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "verified.p01bundle"
+            def create(path, *args, **kwargs):
+                path.write_bytes(b"fake-test-bundle")
+                path.with_suffix(".p01bundle.sha256").write_text("fake-digest")
+                return {"bundle_id": "bnd-test", "bundle_sha256": "fake-digest",
+                        "artifact_count": 2}
+            fake = SimpleNamespace(create_bundle=create,
+                                   validate_bundle=lambda path: {"bundle_id": "bnd-test"})
+            with patch.dict(sys.modules, {"P01_Evidence_Bundle": fake}):
+                with self.c.borrow("writer", token, "workspace:write") as operation:
+                    receipt = adapter.package_verified_ssh_bundle(
+                        operation, destination, "LAB-001", "run", "node",
+                        Path("network.json"), [Path("ssh.json")])
+            self.assertEqual(receipt["workspace_id"], "A")
+            self.assertTrue(destination.exists())
+            self.assertTrue(destination.with_suffix(".p01bundle.sha256").exists())
+
+    def test_cancel_after_bundle_link_cleans_owned_files(self):
+        token = self.opened()
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "verified.p01bundle"
+            def create(path, *args, **kwargs):
+                path.write_bytes(b"fake-test-bundle")
+                path.with_suffix(".p01bundle.sha256").write_text("fake-digest")
+                return {"bundle_id": "bnd-test", "bundle_sha256": "fake-digest",
+                        "artifact_count": 2}
+            fake = SimpleNamespace(create_bundle=create,
+                                   validate_bundle=lambda path: {"bundle_id": "bnd-test"})
+            with self.c.borrow("writer", token, "workspace:write") as operation:
+                original = operation.check
+                calls = [0]
+                def cancel_mid_publish():
+                    calls[0] += 1
+                    if calls[0] == 4:
+                        raise pg.PersistenceError("workspace_generation_stale")
+                    return original()
+                with patch.dict(sys.modules, {"P01_Evidence_Bundle": fake}), \
+                     patch.object(operation, "check", side_effect=cancel_mid_publish):
+                    with self.assertRaisesRegex(pg.PersistenceError, "workspace_generation_stale"):
+                        adapter.package_verified_ssh_bundle(
+                            operation, destination, "LAB-001", "run", "node",
+                            Path("network.json"), [Path("ssh.json")])
+            self.assertFalse(destination.exists())
+            self.assertFalse(destination.with_suffix(".p01bundle.sha256").exists())
 
     def test_live_ssh_families_are_bound_to_workspace(self):
         token = self.opened()
