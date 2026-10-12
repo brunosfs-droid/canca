@@ -361,6 +361,31 @@ class ModelPostgreSQLTests(unittest.TestCase):
                     'SELECT count(*) FROM canca.workspace_observations').fetchone()[0],
                     len(projection['observations']))
 
+    def test_mid_observation_insert_failure_rolls_back_partial_sql(self):
+        """A failed second observation INSERT must not expose the first."""
+        projection=self.source(extras=[{'ip':'192.0.2.11','hostname':'second.corp.example.test'}])
+        self.assertGreaterEqual(len(projection['observations']),2)
+        with self.role('canca_ws_writer'):
+            plan=model.preview_import(self.conn,'A',self.token,projection,
+                                      mode='evidence_only',categories=('identity',))
+            real_execute=self.conn.execute
+            count=[0]
+            def fail_second_observation(query,params=None,*args,**kwargs):
+                if 'INSERT INTO canca.workspace_observations' in str(query):
+                    count[0]+=1
+                    if count[0]==2:
+                        raise pg.PersistenceError('synthetic_mid_insert_failure')
+                return real_execute(query,params,*args,**kwargs)
+            with patch.object(self.conn,'execute',side_effect=fail_second_observation):
+                with self.assertRaisesRegex(pg.PersistenceError,'synthetic_mid_insert_failure'):
+                    model.apply_import(self.conn,'A',self.token,plan['plan_id'],'mid-insert')
+            self.assertEqual(count[0],2)
+            with model.scope(self.conn,'A',self.token):
+                self.assertEqual(self.conn.execute(
+                    'SELECT count(*) FROM canca.workspace_observations').fetchone()[0],0)
+                self.assertEqual(self.conn.execute(
+                    'SELECT count(*) FROM canca.workspace_collections').fetchone()[0],0)
+
     def test_runtime_loss_before_scope_exit_rolls_back_all_model_rows(self):
         actor=pg.open_connection();self.addCleanup(actor.close);actor.execute('SET ROLE canca_ws_writer')
         pid=self.c.lease.conn.info.backend_pid
