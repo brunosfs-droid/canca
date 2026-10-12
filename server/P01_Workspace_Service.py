@@ -120,6 +120,11 @@ class WorkspaceService:
         return self._call(actor,token,'workspace:write',model.relationship,*args,**fields)
     def apply_import(self,actor,token,plan_id,request_id):
         return self._call(actor,token,'workspace:write',model.apply_import,plan_id,request_id)
+    def persisted_network_observations(self,actor,token,*,limit=100):
+        """Read committed network evidence only, fenced by a live workspace."""
+        return self._call(actor,token,'workspace:read',
+                          model.persisted_network_observations,limit=limit)
+
     def verified_network_observations(self,actor,token,assessment_id,bundle_id):
         """Read network signals from a verified workspace-owned import only.
 
