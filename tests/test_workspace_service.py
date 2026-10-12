@@ -76,6 +76,34 @@ class RegisteredOperationTests(unittest.TestCase):
             self.assertFalse(worker.is_alive());preview.assert_not_called()
         self.assertEqual(errors,['workspace_generation_stale']);self.assertFalse(self.c._jobs)
         self.c.close('writer','A',self.c.generation,timeout=0)
+    def test_ssh_identity_import_rejects_unqualified_source_without_sql(self):
+        token=self.opened();adapter=self.adapter()
+        projection={'observations':[{'source_refs':[{'role':'credentialed_evidence'}],
+                   'signals':[{'kind':'hostname','qualified':False,'sources':['ssh.json']}]}]}
+        with patch.object(adapter.sources,'prepare',return_value=projection), \
+             patch.object(model,'preview_import') as preview, \
+             patch.object(model,'apply_import') as apply:
+            with self.assertRaisesRegex(pg.PersistenceError,'model_input_invalid'):
+                adapter.commit_verified_ssh_bundle('writer',token,'LAB-001',
+                                                     'bnd-'+'a'*20,'ssh-negative')
+            preview.assert_not_called();apply.assert_not_called()
+
+    def test_ssh_identity_import_uses_verified_projection_and_model_fences(self):
+        token=self.opened();adapter=self.adapter()
+        projection={'observations':[{'source_refs':[{'role':'credentialed_evidence'}],
+                   'signals':[{'kind':'ssh_host_key_sha256','qualified':True,
+                               'sources':['ssh-evidence.json']}]}]}
+        with patch.object(adapter.sources,'prepare',return_value=projection), \
+             patch.object(model,'preview_import',return_value={'plan_id':'plan-test'}) as preview, \
+             patch.object(model,'apply_import',return_value={'status':'applied'}) as apply:
+            result=adapter.commit_verified_ssh_bundle('writer',token,'LAB-001',
+                                                       'bnd-'+'a'*20,'ssh-approved')
+            self.assertEqual(result['qualified_ssh_observations'],1)
+            self.assertEqual(result['workspace_id'],'A')
+            self.assertEqual(result['generation'],token.generation)
+            self.assertEqual(preview.call_args.kwargs['mode'],'evidence_only')
+            apply.assert_called_once()
+
     def test_old_token_rejected_before_reader(self):
         token=self.opened();self.c.close('writer','A',token.generation);self.opened('B')
         with patch.object(model,'list_objects') as read:
