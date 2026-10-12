@@ -334,6 +334,33 @@ class ModelPostgreSQLTests(unittest.TestCase):
         self.assertTrue(closed.is_set());self.assertEqual(self.conn.execute("SELECT count(*) FROM canca.workspace_objects WHERE object_id='committed'").fetchone()[0],1)
         with self.role('canca_ws_a'),self.assertRaisesRegex(pg.PersistenceError,'model_context_denied'):model.list_objects(self.conn,'A',self.token)
 
+    def test_failed_apply_receipt_rolls_back_all_observations_and_replays_safely(self):
+        """Fault after model inserts, before commit: no partial SQL publication."""
+        projection=self.source()
+        with self.role('canca_ws_writer'):
+            plan=model.preview_import(self.conn,'A',self.token,projection,
+                                      mode='evidence_only',categories=('identity',))
+            with patch.object(model,'receipt',side_effect=pg.PersistenceError('synthetic_commit_fault')):
+                with self.assertRaisesRegex(pg.PersistenceError,'synthetic_commit_fault'):
+                    model.apply_import(self.conn,'A',self.token,plan['plan_id'],
+                                       'fault-injected-apply')
+            with model.scope(self.conn,'A',self.token):
+                self.assertEqual(self.conn.execute(
+                    'SELECT count(*) FROM canca.workspace_observations').fetchone()[0],0)
+                self.assertEqual(self.conn.execute(
+                    'SELECT count(*) FROM canca.workspace_collections').fetchone()[0],0)
+                self.assertEqual(self.conn.execute(
+                    "SELECT count(*) FROM canca.workspace_model_requests "
+                    "WHERE request_id='fault-injected-apply'").fetchone()[0],0)
+            # The original verified plan is still valid after transaction rollback.
+            applied=model.apply_import(self.conn,'A',self.token,plan['plan_id'],
+                                       'fault-injected-apply')
+            self.assertEqual(applied['status'],'applied')
+            with model.scope(self.conn,'A',self.token):
+                self.assertEqual(self.conn.execute(
+                    'SELECT count(*) FROM canca.workspace_observations').fetchone()[0],
+                    len(projection['observations']))
+
     def test_runtime_loss_before_scope_exit_rolls_back_all_model_rows(self):
         actor=pg.open_connection();self.addCleanup(actor.close);actor.execute('SET ROLE canca_ws_writer')
         pid=self.c.lease.conn.info.backend_pid
