@@ -174,7 +174,7 @@ class RegisteredOperationTests(unittest.TestCase):
         with patch.object(adapter.sources,'prepare',return_value={}) as prepare,patch(
                 'P01_Verified_Interfaces.read_verified_interfaces',return_value=[]) as reader:
             # SourceRoots({}) has no configured root: verified reader must fail closed.
-            with self.assertRaises(KeyError):
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
                 adapter.imported_interface_observations('reader',token,'LAB-001',
                     'bnd-'+'a'*20,'evidence.json','a'*64)
             reader.assert_not_called()
