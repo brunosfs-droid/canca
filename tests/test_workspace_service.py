@@ -148,7 +148,7 @@ class RegisteredOperationTests(unittest.TestCase):
 
     def test_ssh_import_revoked_write_blocks_before_evidence_io(self):
         token=self.opened();adapter=self.adapter()
-        self.grants['writer'].discard('workspace:write')
+        self.grants['writer'].discard(('A','workspace:write'))
         with patch.object(adapter.sources,'prepare') as prepare, \
              patch.object(model,'preview_import') as preview:
             with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
