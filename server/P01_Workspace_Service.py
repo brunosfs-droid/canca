@@ -145,6 +145,22 @@ class WorkspaceService:
                         revision=evidence['revision'],prefix_length=prefix_length,
                         candidates=candidates)
 
+    def verified_interface_inventory(self,actor,token,assessment_id,bundle_id,*,limit=100):
+        """Workspace-fenced inventory from a trusted imported bundle."""
+        import P01_Verified_Interface_Inventory as inventory
+        pg.require(type(limit) is int and 1<=limit<=100,'workspace_input_invalid')
+        with self.coordinator.borrow(actor,token,'workspace:read') as operation:
+            operation.check()
+            self.sources.prepare(token.workspace_id,assessment_id,bundle_id)
+            operation.check()
+            root=self.sources._roots.get(token.workspace_id)
+            pg.require(root is not None,'workspace_access_denied')
+            directory=root/'assessments'/assessment_id/'imports'/bundle_id
+            result=inventory.inventory(root,directory,limit=limit)
+            operation.check()
+            return dict(result,workspace_id=token.workspace_id,
+                        generation=token.generation,bundle_id=bundle_id)
+
     def imported_interface_observations(self,actor,token,assessment_id,bundle_id,
                                         source_path,source_sha256):
         """Project only independently reverified imported credentialed artifacts."""
