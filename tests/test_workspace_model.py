@@ -406,8 +406,11 @@ class ModelPostgreSQLTests(unittest.TestCase):
             self.assertEqual(observed[0],2)
             completed=model.apply_import(self.conn,'A',self.token,plan['plan_id'],'r02-retry')
             replayed=model.apply_import(self.conn,'A',self.token,plan['plan_id'],'r02-retry')
-            self.assertEqual(completed,replayed)
             self.assertEqual(completed['status'],'applied')
+            self.assertFalse(completed['replayed'])
+            self.assertTrue(replayed['replayed'])
+            self.assertEqual({k:v for k,v in completed.items() if k!='replayed'},
+                             {k:v for k,v in replayed.items() if k!='replayed'})
             with model.scope(self.conn,'A',self.token):
                 self.assertEqual(self.conn.execute(
                     'SELECT count(*) FROM canca.workspace_observations').fetchone()[0],
