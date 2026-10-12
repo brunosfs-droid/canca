@@ -376,6 +376,35 @@ def object_state(conn,workspace_id,token,object_id,*,expected_revision=None):
                     declarations=[dict(zip(('declaration_id','attribute','value','reason','author_role','created_revision'),d)) for d in declarations])
 
 
+def persisted_network_observations(conn,workspace_id,token,*,limit=100):
+    """Read persisted IP/MAC signals with RLS and exact source provenance.
+
+    Does not equate addresses with ownership or establish topology relations.
+    """
+    require(type(limit) is int and 1 <= limit <= 100)
+    with scope(conn,workspace_id,token) as revision:
+        rows=conn.execute(
+            'SELECT collection_id,ordinal,source_asset_id,signals,source_refs '
+            'FROM canca.workspace_observations WHERE workspace_id=%s '
+            'ORDER BY collection_id,ordinal LIMIT %s',(workspace_id,limit+1)).fetchall()
+        require(len(rows)<=limit)
+        observed=[]
+        for collection_id,ordinal,source_id,signals,refs in rows:
+            network_refs={r['path'] for r in refs if r['role']=='network_discovery'}
+            for signal in signals:
+                if signal['kind'] not in ('ip','mac') or signal['qualified']:
+                    continue
+                sources=sorted(network_refs.intersection(signal['sources']))
+                if sources:
+                    observed.append(dict(collection_id=collection_id,ordinal=ordinal,
+                                         source_asset_id=source_id,kind=signal['kind'],
+                                         value=signal['value'],source_paths=sources,
+                                         origin='observed',ownership_confirmed=False,
+                                         graph_edges=[]))
+        return dict(status='network_observations',workspace_id=workspace_id,
+                    revision=revision,observations=observed)
+
+
 def graph(conn,workspace_id,token,root_id,*,depth=2,node_limit=100,edge_limit=200,expected_revision=None):
     ws.identifier(root_id)
     require(type(depth) is int and 0<=depth<=4 and type(node_limit) is int and 1<=node_limit<=100
