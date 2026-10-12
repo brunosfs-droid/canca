@@ -150,6 +150,37 @@ class WorkspaceService:
             operation.check()
             return dict(applied,workspace_id=token.workspace_id,generation=token.generation)
 
+    def commit_verified_ssh_bundle(self,actor,token,assessment_id,bundle_id,request_id):
+        """Import previously verified SSH identity evidence, never raw SSH output.
+
+        The projection must contain a credentialed_evidence provenance reference
+        and a qualified SSH host-key fingerprint on the same observation.
+        Existing model preview/apply enforces revision, lease and SQL policy.
+        """
+        ws.identifier(request_id)
+        with self.coordinator.borrow(actor,token,'workspace:write') as operation:
+            operation.check()
+            projection=self.sources.prepare(token.workspace_id,assessment_id,bundle_id)
+            operation.check()
+            eligible=[
+                row for row in projection['observations']
+                if any(signal.get('kind')=='ssh_host_key_sha256'
+                       and signal.get('qualified') is True
+                       and any(ref.get('role')=='credentialed_evidence'
+                               and ref.get('path') in signal.get('sources',())
+                               for ref in row['source_refs'])
+                       for signal in row['signals'])
+            ]
+            pg.require(bool(eligible),'model_input_invalid')
+            plan=model.preview_import(actor,token.workspace_id,token,projection,
+                                      mode='evidence_only',categories=('identity',))
+            operation.check()
+            applied=model.apply_import(actor,token.workspace_id,token,
+                                       plan['plan_id'],request_id)
+            operation.check()
+            return dict(applied,workspace_id=token.workspace_id,generation=token.generation,
+                        qualified_ssh_observations=len(eligible))
+
     def live_scan_intent(self,actor,token,scope_id,mode,*,ack_authorized_access=False):
         # Preview only. No scanner, network API, credentials, or persistent job.
         with self.coordinator.borrow(actor,token,'workspace:write') as operation:
