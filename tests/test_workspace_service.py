@@ -271,9 +271,11 @@ class ServicePostgreSQLTests(unittest.TestCase):
                 self.conn,self.token,'LAB-001',directory.name,'ssh-model-integration')
             self.assertEqual(result['status'],'applied')
             self.assertEqual(result['qualified_ssh_observations'],1)
-            rows=self.conn.execute(
-                "SELECT signals,source_refs FROM canca.workspace_observations "
-                "WHERE workspace_id='A'").fetchall()
+            # RLS requires the workspace-scoped transaction even for readback.
+            with model.scope(self.conn,'A',self.token):
+                rows=self.conn.execute(
+                    "SELECT signals,source_refs FROM canca.workspace_observations "
+                    "WHERE workspace_id='A'").fetchall()
             self.assertTrue(any(
                 signal['kind']=='ssh_host_key_sha256' and signal['value']==fingerprint
                 and any(ref['path'] in signal['sources'] for ref in refs)
