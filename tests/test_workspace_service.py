@@ -117,6 +117,46 @@ class RegisteredOperationTests(unittest.TestCase):
             self.assertEqual(preview.call_args.kwargs['mode'],'evidence_only')
             apply.assert_called_once()
 
+    def test_ssh_import_cancel_after_preview_prevents_apply(self):
+        token=self.opened();adapter=self.adapter()
+        projection={'observations':[{'source_refs':[{'role':'credentialed_evidence','path':'ssh.json'}],
+                    'signals':[{'kind':'ssh_host_key_sha256','qualified':True,
+                                'sources':['ssh.json']}]}]}
+        started=threading.Event();release=threading.Event();errors=[]
+        def delayed_preview(*args,**kwargs):
+            started.set()
+            self.assertTrue(release.wait(3))
+            return {'plan_id':'plan-test'}
+        def run():
+            try:adapter.commit_verified_ssh_bundle('writer',token,'LAB-001',
+                                                    'bnd-'+'a'*20,'ssh-cancel')
+            except pg.PersistenceError as exc:errors.append(str(exc))
+        with patch.object(adapter.sources,'prepare',return_value=projection), \
+             patch.object(model,'preview_import',side_effect=delayed_preview), \
+             patch.object(model,'apply_import') as apply:
+            worker=threading.Thread(target=run);worker.start()
+            self.assertTrue(started.wait(3))
+            try:
+                with self.assertRaisesRegex(pg.PersistenceError,'workspace_close_pending'):
+                    self.c.close('writer','A',token.generation,timeout=0)
+            finally:
+                release.set();worker.join(3)
+            self.assertFalse(worker.is_alive())
+            self.assertEqual(errors,['workspace_generation_stale'])
+            apply.assert_not_called()
+        self.assertFalse(self.c._jobs)
+
+    def test_ssh_import_revoked_write_blocks_before_evidence_io(self):
+        token=self.opened();adapter=self.adapter()
+        self.grants['writer'].discard('workspace:write')
+        with patch.object(adapter.sources,'prepare') as prepare, \
+             patch.object(model,'preview_import') as preview:
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
+                adapter.commit_verified_ssh_bundle('writer',token,'LAB-001',
+                                                   'bnd-'+'a'*20,'ssh-revoked')
+            prepare.assert_not_called()
+            preview.assert_not_called()
+
     def test_old_token_rejected_before_reader(self):
         token=self.opened();self.c.close('writer','A',token.generation);self.opened('B')
         with patch.object(model,'list_objects') as read:
