@@ -164,12 +164,12 @@ class WorkspaceService:
             operation.check()
             eligible=[
                 row for row in projection['observations']
-                if any(ref.get('role')=='credentialed_evidence'
-                       for ref in row['source_refs'])
-                and any(signal.get('kind')=='ssh_host_key_sha256'
-                        and signal.get('qualified') is True
-                        and signal.get('sources')
-                        for signal in row['signals'])
+                if any(signal.get('kind')=='ssh_host_key_sha256'
+                       and signal.get('qualified') is True
+                       and any(ref.get('role')=='credentialed_evidence'
+                               and ref.get('path') in signal.get('sources',())
+                               for ref in row['source_refs'])
+                       for signal in row['signals'])
             ]
             pg.require(bool(eligible),'model_input_invalid')
             plan=model.preview_import(actor,token.workspace_id,token,projection,
