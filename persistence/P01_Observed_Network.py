@@ -42,3 +42,33 @@ def project_network_assets(network_document):
             "graph_edges": [],
         })
     return result
+
+
+def project_verified_network_observations(projection):
+    """Use registry-verified source references, never raw unauthenticated asset input.
+
+    The caller still owns workspace authorization and matching the imported store.
+    IP and MAC evidence do not prove topology, port ownership or asset identity.
+    """
+    import P01_Asset_Registry as registry
+    registry.validate_projection(projection)
+    result = []
+    for observation in projection["observations"]:
+        refs = {ref["path"] for ref in observation["source_refs"]
+                if ref["role"] == "network_discovery"}
+        for signal in observation["signals"]:
+            if signal["kind"] not in ("ip", "mac") or signal["qualified"]:
+                continue
+            origin_paths = sorted(refs.intersection(signal["sources"]))
+            if not origin_paths:
+                continue
+            result.append({
+                "source_asset_id": observation["source_asset_id"],
+                "kind": signal["kind"],
+                "value": signal["value"],
+                "source_paths": origin_paths,
+                "origin": "observed",
+                "ownership_confirmed": False,
+                "graph_edges": [],
+            })
+    return result
