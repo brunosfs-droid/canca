@@ -123,6 +123,24 @@ class RegisteredOperationTests(unittest.TestCase):
                 adapter.verified_network_observations('reader',token,'LAB-001','bnd-'+'a'*20)
             source.assert_called_once()
 
+    def test_verified_interface_ref_rejected_before_projecting_untrusted_payload(self):
+        token=self.opened()
+        adapter=self.adapter()
+        projection={'observations':[{'source_refs':[{'role':'credentialed_evidence',
+                   'path':'trusted.json','sha256':'a'*64}]}]}
+        evidence={'collection_status':'collected','network':{'interfaces':[]}}
+        with patch.object(adapter.sources,'prepare',return_value=projection),patch(
+                'P01_Observed_Interfaces.project_interfaces') as collector:
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_input_invalid'):
+                adapter.verified_interface_observations('reader',token,'LAB-001',
+                    'bnd-'+'a'*20,evidence,'forged.json','b'*64)
+            collector.assert_not_called()
+            receipt=adapter.verified_interface_observations('reader',token,'LAB-001',
+                'bnd-'+'a'*20,evidence,'trusted.json','a'*64)
+            self.assertEqual(receipt['workspace_id'],'A')
+            collector.assert_called_once()
+            self.assertFalse(self.c._jobs)
+
     def test_read_is_registered_and_postcheck_suppresses_revoked_result(self):
         token=self.opened();adapter=self.adapter()
         def read(*args,**kwargs):
