@@ -55,6 +55,57 @@ class SSHCoordinatorTests(unittest.TestCase):
                 self.assertEqual(list(Path(directory).iterdir()), [])
 
 
+    def test_real_ssh_evidence_bundle_preserves_fingerprint_provenance(self):
+        """Synthetic SSH evidence, real packager/validator, no network."""
+        import json
+        import zipfile
+        token = self.opened()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            network, targets, manifest, _ = evidence_fixtures.EvidenceBundleTests()._inputs(root)
+            ssh_doc = {
+                "metadata": {
+                    "enricher_name": "P01-SSH-Credentialed-Enrichment",
+                    "enricher_version": "0.4b.2.1",
+                    "schema_version": "0.4b.2",
+                    "secret_values_persisted_to_output": False,
+                },
+                "target": {"ip": "192.0.2.10", "port": 22, "protocol": "ssh"},
+                "authentication": {
+                    "success": True,
+                    "server_host_key": {
+                        "algorithm": "ssh-ed25519",
+                        "fingerprint_sha256": "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    },
+                },
+                "enrichment": {
+                    "collection_status": "collected",
+                    "identity": {"hostname": "host.example.test"},
+                    "network": {"interfaces": [], "routes": []},
+                },
+            }
+            ssh_path = evidence_fixtures.write_json(
+                root / "P01-SSH-Enrichment_lab.json", ssh_doc, sidecar=True)
+            output = root / "ssh.p01bundle"
+            with self.c.borrow("writer", token, "workspace:write") as operation:
+                receipt = adapter.package_verified_ssh_bundle(
+                    operation, output, "LAB-001", "RUN-SSH-001", "NODE-01",
+                    network, [ssh_path], manifest)
+            import P01_Evidence_Bundle as bundles
+            self.assertTrue(bundles.validate_bundle(output)["valid"])
+            with zipfile.ZipFile(output) as archive:
+                manifest_doc = json.loads(archive.read("bundle-manifest.json"))
+                ssh_refs = [x for x in manifest_doc["artifacts"]
+                            if x["role"] == "credentialed_evidence"]
+                self.assertEqual(len(ssh_refs), 1)
+                artifact = json.loads(archive.read(ssh_refs[0]["path"]))
+                self.assertEqual(
+                    artifact["authentication"]["server_host_key"]["fingerprint_sha256"],
+                    ssh_doc["authentication"]["server_host_key"]["fingerprint_sha256"])
+                self.assertEqual(artifact["target"]["protocol"], "ssh")
+                self.assertTrue(ssh_refs[0]["source_sidecar_verified"])
+            self.assertEqual(receipt["artifact_count"], 3)
+
     def test_real_bundle_packaging_and_tamper_rejection(self):
         token = self.opened()
         with tempfile.TemporaryDirectory() as directory:
