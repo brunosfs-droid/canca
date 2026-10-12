@@ -90,7 +90,7 @@ class SSHCoordinatorTests(unittest.TestCase):
                 calls = [0]
                 def cancel_mid_publish():
                     calls[0] += 1
-                    if calls[0] == 4:
+                    if calls[0] == 5:
                         raise pg.PersistenceError("workspace_generation_stale")
                     return original()
                 with patch.dict(sys.modules, {"P01_Evidence_Bundle": fake}), \
