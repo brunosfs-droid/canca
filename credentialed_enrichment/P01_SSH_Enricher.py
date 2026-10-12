@@ -30,6 +30,7 @@ import re
 import socket
 import sys
 import time
+import threading
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -641,6 +642,7 @@ def connect_with_profile(
     connect_timeout: float,
     command_timeout: float,
     collect_commands: bool,
+    operation: Any = None,
 ) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
     if paramiko is None:
         raise RuntimeError(
@@ -677,6 +679,8 @@ def connect_with_profile(
         attempt["error_type"] = "CredentialConfigError"
         return attempt, None
 
+    if operation is not None:
+        operation.check()
     try:
         password = _credential_api().resolve_secret(str(password_ref), prompt_label=f"SSH secret for {profile_id}: ")
     except Exception as exc:
@@ -686,9 +690,27 @@ def connect_with_profile(
         attempt["error"] = "credential_provider_unavailable"
         return attempt, None
 
+    if operation is not None:
+        operation.check()
     client = prepare_ssh_client(known_hosts, host_key_policy)
     started = time.monotonic()
+    watcher_done = threading.Event()
+    watcher = None
+    if operation is not None:
+        def cancel_transport():
+            while not watcher_done.is_set():
+                if operation.cancel.wait(0.02):
+                    try:
+                        client.close()
+                    except Exception:
+                        operation.coordinator.fail_closed()
+                    return
+        watcher = threading.Thread(target=cancel_transport, daemon=True,
+                                   name="canca-r02-ssh-auth-cancel")
+        watcher.start()
     try:
+        if operation is not None:
+            operation.check()
         client.connect(
             hostname=target,
             port=port,
@@ -700,6 +722,8 @@ def connect_with_profile(
             allow_agent=False,
             look_for_keys=False,
         )
+        if operation is not None:
+            operation.check()
         _save_tofu_host_key(client, known_hosts, host_key_policy)
 
         transport = client.get_transport()
@@ -718,8 +742,12 @@ def connect_with_profile(
         })
 
         if collect_commands:
+            if operation is not None:
+                operation.check()
             capability = probe_exec_capability(client, command_timeout)
             if capability.get("exec_output_available"):
+                if operation is not None:
+                    operation.check()
                 enrichment = collect_read_only(client, command_timeout)
                 enrichment["collection_status"] = "collected"
                 enrichment["ssh_capabilities"] = capability
@@ -755,6 +783,8 @@ def connect_with_profile(
                 },
                 "command_evidence": [],
             }
+        if operation is not None:
+            operation.check()
         return attempt, enrichment
     except Exception as exc:
         attempt.update({
@@ -768,6 +798,11 @@ def connect_with_profile(
     finally:
         # Ensure the secret doesn't remain in a long-lived variable after use.
         password = None
+        watcher_done.set()
+        if watcher is not None:
+            watcher.join(timeout=1)
+            if watcher.is_alive():
+                operation.coordinator.fail_closed()
         try:
             client.close()
         except Exception:

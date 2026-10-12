@@ -69,3 +69,33 @@ def collect(operation, client, *, timeout=5.0):
                      for name, item in families.items()},
         "raw_output_persisted": False,
     }
+
+
+def authenticate(operation, target, port, profile_match, known_hosts, *,
+                 connect_timeout=5.0, command_timeout=5.0, collect_commands=False):
+    """Internal, caller-authorized credentialed SSH; no HTTP/SQL publication."""
+    import ipaddress
+    pg.require(type(operation) is coordinator.Operation, "workspace_input_invalid")
+    try:
+        address = ipaddress.ip_address(target)
+    except ValueError:
+        raise pg.PersistenceError("workspace_input_invalid") from None
+    pg.require(address.version == 4 and address.is_private and
+               type(port) is int and 1 <= port <= 65535,
+               "workspace_input_invalid")
+    operation.check()
+    attempt, evidence = ssh.connect_with_profile(
+        target, port, profile_match, Path(known_hosts), "strict",
+        connect_timeout, command_timeout, collect_commands,
+        operation=operation)
+    operation.check()
+    # No raw SSH output or identity is published without an explicit
+    # workspace-bound persistence schema and transactional generation fence.
+    return {
+        "workspace_id": operation.token.workspace_id,
+        "generation": operation.token.generation,
+        "success": bool(attempt.get("success")),
+        "result": attempt.get("result"),
+        "raw_output_persisted": False,
+        "evidence_persisted": False,
+    }
