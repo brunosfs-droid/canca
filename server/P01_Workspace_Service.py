@@ -246,6 +246,18 @@ class WorkspaceService:
             operation.check()
             return result
 
+    def ssh_package_verified(self,actor,token,output,assessment_id,run_id,node_id,
+                             network_path,credentialed_paths,manifest_path=None):
+        """Internal-only verified bundle package under an active write operation."""
+        import P01_Workspace_SSH_Adapter as ssh_adapter
+        with self.coordinator.borrow(actor,token,'workspace:write') as operation:
+            operation.check()
+            result=ssh_adapter.package_verified_ssh_bundle(
+                operation,output,assessment_id,run_id,node_id,
+                network_path,credentialed_paths,manifest_path)
+            operation.check()
+            return result
+
     def ssh_read_only(self,actor,token,client,*,timeout=5.0):
         """Trusted internal SSH adapter; caller owns authenticated transport."""
         import P01_Workspace_SSH_Adapter as ssh_adapter

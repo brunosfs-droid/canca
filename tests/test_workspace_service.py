@@ -47,6 +47,27 @@ class RegisteredOperationTests(unittest.TestCase):
     cleanup=coordinator.CoordinatorTests.cleanup
     opened=coordinator.CoordinatorTests.opened
     def adapter(self):return service.WorkspaceService(self.c,service.SourceRoots({}))
+    def test_ssh_package_requires_write_and_fences_stale_generation(self):
+        token=self.opened()
+        adapter=self.adapter()
+        with patch('P01_Workspace_SSH_Adapter.package_verified_ssh_bundle',
+                   return_value={'bundle_created':True}) as package:
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
+                adapter.ssh_package_verified('reader',token,'output.p01bundle',
+                    'LAB-001','R1','NODE-01','network.json',['ssh.json'])
+            package.assert_not_called()
+            receipt=adapter.ssh_package_verified('writer',token,'output.p01bundle',
+                'LAB-001','R1','NODE-01','network.json',['ssh.json'])
+            self.assertTrue(receipt['bundle_created'])
+            package.assert_called_once()
+            self.assertFalse(self.c._jobs)
+            self.c.close('writer','A',token.generation,timeout=0)
+            self.opened('B')
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_generation_stale'):
+                adapter.ssh_package_verified('writer',token,'output.p01bundle',
+                    'LAB-001','R1','NODE-01','network.json',['ssh.json'])
+            package.assert_called_once()
+
     def test_private_ssh_export_requires_workspace_write_and_tracks_job(self):
         token=self.opened()
         adapter=self.adapter()
