@@ -1,5 +1,6 @@
 """Bounded trusted source handles and coordinator-registered model operations."""
 import os
+import base64
 from pathlib import Path
 import sys
 import tempfile
@@ -223,6 +224,67 @@ class ServicePostgreSQLTests(unittest.TestCase):
             with self.assertRaisesRegex(pg.PersistenceError,'workspace_generation_stale'):
                 adapter.commit_verified_bundle(
                     self.conn,self.token,'LAB-001',directory.name,'atomic-evidence-stale')
+
+    def test_real_ssh_fingerprint_reaches_workspace_sql_and_stale_token_is_rejected(self):
+        base=self.assetbase/'ssh-real-model'
+        base.mkdir(parents=True,exist_ok=True)
+        network=assets.source.network_doc()
+        network['assets'][0].update(ip='192.0.2.10',hostname='ssh.corp.example.test')
+        network_path=assets.source.write_json(base/'network.json',network,sidecar=True)
+        fingerprint='SHA256:'+base64.b64encode(bytes(range(32))).decode().rstrip('=')
+        ssh_doc={
+            'metadata':{'enricher_name':'P01-SSH-Credentialed-Enrichment',
+                        'enricher_version':'0.4b.2.1',
+                        'schema_version':'0.4b.2',
+                        'secret_values_persisted_to_output':False},
+            'target':{'ip':'192.0.2.10','port':22,'protocol':'ssh'},
+            'authentication':{'success':True,
+                              'server_host_key':{'fingerprint_sha256':fingerprint}},
+            'enrichment':{'collection_status':'collected',
+                          'identity':{'hostname':'ssh.corp.example.test'},
+                          'network':{'interfaces':[],'routes':[]}},
+        }
+        target=assets.source.write_json(base/'P01-SSH-Enrichment_lab.json',ssh_doc,sidecar=True)
+        manifest=assets.source.manifest_doc()
+        manifest['assessment_id']='LAB-001'
+        manifest_path=assets.source.write_json(base/'assessment.json',manifest)
+        resolved=assets.registry.resolver.resolve(network_path,[target],manifest_path)
+        resolved_path=assets.source.write_json(base/'resolved.json',resolved,sidecar=True)
+        bundle=base/'ssh.p01bundle'
+        assets.source.bundle_mod.create_bundle(
+            bundle,'LAB-001','RUN-SSH','NODE-01',network_path,[target],
+            manifest_path,resolved_path,require_evidence_sidecars=True)
+        store=base/'store'
+        imported=assets.source.mod.import_bundle(
+            bundle,store,process=False,require_outer_sidecar=True)
+        adapter=service.WorkspaceService(self.c,service.SourceRoots({'A':store}))
+        directory=Path(imported['import_dir'])
+        projection=adapter.sources.prepare('A','LAB-001',directory.name)
+        fingerprint_signals=[
+            signal for observation in projection['observations']
+            for signal in observation['signals']
+            if signal['kind']=='ssh_host_key_sha256']
+        self.assertEqual(len(fingerprint_signals),1)
+        self.assertEqual(fingerprint_signals[0]['value'],fingerprint)
+        with self.role('canca_ws_writer'):
+            result=adapter.commit_verified_ssh_bundle(
+                self.conn,self.token,'LAB-001',directory.name,'ssh-model-integration')
+            self.assertEqual(result['status'],'applied')
+            self.assertEqual(result['qualified_ssh_observations'],1)
+            # RLS requires the workspace-scoped transaction even for readback.
+            with model.scope(self.conn,'A',self.token):
+                rows=self.conn.execute(
+                    "SELECT signals,source_refs FROM canca.workspace_observations "
+                    "WHERE workspace_id='A'").fetchall()
+            self.assertTrue(any(
+                signal['kind']=='ssh_host_key_sha256' and signal['value']==fingerprint
+                and any(ref['path'] in signal['sources'] for ref in refs)
+                for signals,refs in rows for signal in signals))
+            self.c.close(self.conn,'A',self.c.generation)
+            self.c.open(self.conn,'B',self.c.generation)
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_generation_stale'):
+                adapter.commit_verified_ssh_bundle(
+                    self.conn,self.token,'LAB-001',directory.name,'ssh-stale')
 
     def test_categories_real_sql_revision_and_role_isolation(self):
         adapter=self.adapter()
