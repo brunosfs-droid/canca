@@ -21,6 +21,21 @@ class SSHCoordinatorTests(unittest.TestCase):
     cleanup = fixtures.CoordinatorTests.cleanup
     opened = fixtures.CoordinatorTests.opened
 
+    def test_unbounded_ssh_timeouts_rejected_before_credentials_and_network(self):
+        token=self.opened()
+        profile=object()
+        with self.c.borrow("writer",token,"workspace:read") as operation:
+            with patch.object(adapter.ssh,"connect_with_profile") as connect:
+                for bad in (0,0.49,31,float("inf"),float("nan"),True,"5"):
+                    with self.subTest(timeout=bad):
+                        with self.assertRaisesRegex(pg.PersistenceError,"workspace_input_invalid"):
+                            adapter.authenticate(operation,"192.168.100.10",22,profile,
+                                                 "known_hosts",connect_timeout=bad)
+                with self.assertRaisesRegex(pg.PersistenceError,"workspace_input_invalid"):
+                    adapter.authenticate(operation,"192.168.100.10",22,profile,
+                                         "known_hosts",collect_commands="yes")
+                connect.assert_not_called()
+
     def test_fenced_private_ssh_evidence_export_and_cleanup(self):
         token = self.opened()
         with tempfile.TemporaryDirectory() as directory:
