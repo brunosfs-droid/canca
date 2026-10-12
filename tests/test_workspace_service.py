@@ -78,7 +78,7 @@ class RegisteredOperationTests(unittest.TestCase):
         self.c.close('writer','A',self.c.generation,timeout=0)
     def test_ssh_identity_import_rejects_unqualified_source_without_sql(self):
         token=self.opened();adapter=self.adapter()
-        projection={'observations':[{'source_refs':[{'role':'credentialed_evidence'}],
+        projection={'observations':[{'source_refs':[{'role':'credentialed_evidence','path':'ssh-evidence.json'}],
                    'signals':[{'kind':'hostname','qualified':False,'sources':['ssh.json']}]}]}
         with patch.object(adapter.sources,'prepare',return_value=projection), \
              patch.object(model,'preview_import') as preview, \
@@ -88,9 +88,22 @@ class RegisteredOperationTests(unittest.TestCase):
                                                      'bnd-'+'a'*20,'ssh-negative')
             preview.assert_not_called();apply.assert_not_called()
 
+    def test_ssh_identity_import_rejects_unrelated_fingerprint_provenance(self):
+        token=self.opened();adapter=self.adapter()
+        projection={'observations':[{
+            'source_refs':[{'role':'credentialed_evidence','path':'ssh-evidence.json'}],
+            'signals':[{'kind':'ssh_host_key_sha256','qualified':True,
+                        'sources':['unrelated.json']}]}]}
+        with patch.object(adapter.sources,'prepare',return_value=projection), \
+             patch.object(model,'preview_import') as preview:
+            with self.assertRaisesRegex(pg.PersistenceError,'model_input_invalid'):
+                adapter.commit_verified_ssh_bundle('writer',token,'LAB-001',
+                                                     'bnd-'+'a'*20,'ssh-unrelated')
+            preview.assert_not_called()
+
     def test_ssh_identity_import_uses_verified_projection_and_model_fences(self):
         token=self.opened();adapter=self.adapter()
-        projection={'observations':[{'source_refs':[{'role':'credentialed_evidence'}],
+        projection={'observations':[{'source_refs':[{'role':'credentialed_evidence','path':'ssh-evidence.json'}],
                    'signals':[{'kind':'ssh_host_key_sha256','qualified':True,
                                'sources':['ssh-evidence.json']}]}]}
         with patch.object(adapter.sources,'prepare',return_value=projection), \
