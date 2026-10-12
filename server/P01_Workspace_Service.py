@@ -128,6 +128,28 @@ class WorkspaceService:
             operation.check()
             return dict(result,generation=token.generation)
 
+    def commit_verified_bundle(self,actor,token,assessment_id,bundle_id,request_id):
+        """Internal revision-fenced evidence-only import of a verified bundle.
+
+        SourceRoots verifies source receipts; no arbitrary payload or SSH output
+        can be sent directly. The revision/lease SQL fence and operation remain
+        held by each model transaction. Preview and apply are separate commits.
+        """
+        ws.identifier(request_id)
+        with self.coordinator.borrow(actor,token,'workspace:write') as operation:
+            operation.check()
+            projection=self.sources.prepare(token.workspace_id,assessment_id,bundle_id)
+            operation.check()
+            # Each model entrypoint owns its own SQL transaction and guarded
+            # revision/lease lock; the coordinator needs an idle actor connection.
+            plan=model.preview_import(actor,token.workspace_id,token,projection,
+                                      mode='evidence_only',categories=('identity',))
+            operation.check()
+            applied=model.apply_import(actor,token.workspace_id,token,
+                                       plan['plan_id'],request_id)
+            operation.check()
+            return dict(applied,workspace_id=token.workspace_id,generation=token.generation)
+
     def live_scan_intent(self,actor,token,scope_id,mode,*,ack_authorized_access=False):
         # Preview only. No scanner, network API, credentials, or persistent job.
         with self.coordinator.borrow(actor,token,'workspace:write') as operation:
