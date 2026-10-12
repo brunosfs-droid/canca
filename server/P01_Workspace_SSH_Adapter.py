@@ -187,6 +187,9 @@ def package_verified_ssh_bundle(operation, output, assessment_id, run_id, node_i
         verified = bundles.validate_bundle(staged)
         pg.require(verified.get("bundle_id") == result["bundle_id"],
                    "workspace_input_invalid")
+        if os.name != "nt":
+            os.chmod(staged, 0o600)
+            os.chmod(staged.with_suffix(staged.suffix + ".sha256"), 0o600)
         operation.check()
         sidecar = destination.with_suffix(destination.suffix + ".sha256")
         pg.require(not sidecar.exists(), "workspace_input_invalid")
