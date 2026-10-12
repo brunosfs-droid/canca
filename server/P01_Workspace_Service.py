@@ -154,7 +154,8 @@ class WorkspaceService:
             # SourceRoots also establishes the current workspace's trusted root.
             self.sources.prepare(token.workspace_id,assessment_id,bundle_id)
             operation.check()
-            root=self.sources._roots[token.workspace_id]
+            root=self.sources._roots.get(token.workspace_id)
+            pg.require(root is not None,'workspace_access_denied')
             import_dir=root/'assessments'/assessment_id/'imports'/bundle_id
             rows=verified.read_verified_interfaces(root,import_dir,source_path,source_sha256)
             operation.check()
