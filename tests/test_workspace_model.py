@@ -223,6 +223,25 @@ class ModelPostgreSQLTests(unittest.TestCase):
             with self.assertRaises(pg.PersistenceError):
                 model.persisted_network_observations(self.conn,'A',self.token)
 
+    def test_persisted_network_lookup_filters_one_source_asset(self):
+        self.apply(self.source(),mode='evidence_only')
+        with self.role('canca_ws_writer'):
+            all_rows=model.persisted_network_observations(self.conn,'A',self.token)
+            self.assertTrue(all_rows['observations'])
+            asset=all_rows['observations'][0]['source_asset_id']
+            selected=model.persisted_network_observations(
+                self.conn,'A',self.token,source_asset_id=asset)
+            self.assertTrue(selected['observations'])
+            self.assertTrue(all(row['source_asset_id']==asset for row in selected['observations']))
+            self.assertEqual(
+                model.persisted_network_observations(
+                    self.conn,'A',self.token,source_asset_id='missing-asset')['observations'],[])
+            for invalid in ('', 'a'*257, 'bad\\nasset', 12, True):
+                with self.subTest(invalid=invalid),self.assertRaisesRegex(
+                        pg.PersistenceError,'model_input_invalid'):
+                    model.persisted_network_observations(
+                        self.conn,'A',self.token,source_asset_id=invalid)
+
     def test_manual_declared_and_observed_conflict_remain_visible(self):
         self.create('manual',attributes={'fqdn':'manual.example.test'})
         self.apply(self.source(),decisions={0:{'action':'link','object_id':'manual','reason':'Reviewed device identity'}})
