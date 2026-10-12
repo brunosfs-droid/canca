@@ -376,17 +376,26 @@ def object_state(conn,workspace_id,token,object_id,*,expected_revision=None):
                     declarations=[dict(zip(('declaration_id','attribute','value','reason','author_role','created_revision'),d)) for d in declarations])
 
 
-def persisted_network_observations(conn,workspace_id,token,*,limit=100):
-    """Read persisted IP/MAC signals with RLS and exact source provenance.
+def persisted_network_observations(conn,workspace_id,token,*,limit=100,source_asset_id=None):
+    """Read persisted, provenanced IP/MAC signals under workspace RLS.
 
-    Does not equate addresses with ownership or establish topology relations.
+    Optional source asset filter allows inspecting one discovered device without
+    reading unrelated collections. Ambiguous addresses never imply topology.
     """
     require(type(limit) is int and 1 <= limit <= 100)
+    if source_asset_id is not None:
+        require(type(source_asset_id) is str and 1 <= len(source_asset_id) <= 256
+                and not any(ord(c)<32 for c in source_asset_id))
     with scope(conn,workspace_id,token) as revision:
-        rows=conn.execute(
-            'SELECT collection_id,ordinal,source_asset_id,signals,source_refs '
-            'FROM canca.workspace_observations WHERE workspace_id=%s '
-            'ORDER BY collection_id,ordinal LIMIT %s',(workspace_id,limit+1)).fetchall()
+        query=('SELECT collection_id,ordinal,source_asset_id,signals,source_refs '
+               'FROM canca.workspace_observations WHERE workspace_id=%s')
+        args=[workspace_id]
+        if source_asset_id is not None:
+            query+=' AND source_asset_id=%s'
+            args.append(source_asset_id)
+        query+=' ORDER BY collection_id,ordinal LIMIT %s'
+        args.append(limit+1)
+        rows=conn.execute(query,tuple(args)).fetchall()
         require(len(rows)<=limit)
         observed=[]
         for collection_id,ordinal,source_id,signals,refs in rows:
@@ -402,7 +411,7 @@ def persisted_network_observations(conn,workspace_id,token,*,limit=100):
                                          origin='observed',ownership_confirmed=False,
                                          graph_edges=[]))
         return dict(status='network_observations',workspace_id=workspace_id,
-                    revision=revision,observations=observed)
+                    revision=revision,source_asset_id=source_asset_id,observations=observed)
 
 
 def graph(conn,workspace_id,token,root_id,*,depth=2,node_limit=100,edge_limit=200,expected_revision=None):
