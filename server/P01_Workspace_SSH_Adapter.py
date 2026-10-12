@@ -99,3 +99,58 @@ def authenticate(operation, target, port, profile_match, known_hosts, *,
         "raw_output_persisted": False,
         "evidence_persisted": False,
     }
+
+
+def export_verified_ssh_evidence(operation, output_dir, run_label, payload):
+    """Internal staging export, not a workspace import bundle.
+
+    Publish only after generation checks. The output is still sensitive private
+    evidence and must be handled by the existing verified-bundle pipeline.
+    """
+    import os
+    import json
+    import tempfile
+    import hashlib
+    pg.require(type(operation) is coordinator.Operation, "workspace_input_invalid")
+    pg.require(type(payload) is dict and type(run_label) is str, "workspace_input_invalid")
+    output_dir = Path(output_dir)
+    pg.require(output_dir.is_dir() and not output_dir.is_symlink(), "workspace_input_invalid")
+    operation.check()
+    label = ssh.safe_label(run_label)
+    raw = (json.dumps(payload, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8")
+    pg.require(len(raw) <= 4 * 1024 * 1024, "workspace_input_invalid")
+    name = "P01-SSH-Enrichment_" + label + "_" + hashlib.sha256(raw).hexdigest()[:16] + ".json"
+    destination = output_dir / name
+    pg.require(not destination.exists() and not destination.is_symlink(), "workspace_input_invalid")
+    staging = None
+    published = False
+    try:
+        with tempfile.NamedTemporaryFile(dir=output_dir, prefix=".canca-ssh-", suffix=".tmp",
+                                         delete=False) as temp:
+            staging = Path(temp.name)
+            if os.name != "nt":
+                os.chmod(staging, 0o600)
+            temp.write(raw)
+            temp.flush()
+            os.fsync(temp.fileno())
+        operation.check()
+        # Exclusive creation prevents replacing an existing evidence artifact.
+        with destination.open("xb") as final:
+            if os.name != "nt":
+                os.chmod(destination, 0o600)
+            final.write(staging.read_bytes())
+            final.flush()
+            os.fsync(final.fileno())
+        published = True
+        operation.check()
+        return {"workspace_id": operation.token.workspace_id,
+                "generation": operation.token.generation,
+                "filename": name, "sha256": hashlib.sha256(raw).hexdigest(),
+                "bundle_created": False}
+    except BaseException:
+        if published or destination.exists():
+            destination.unlink(missing_ok=True)
+        raise
+    finally:
+        if staging is not None:
+            staging.unlink(missing_ok=True)
