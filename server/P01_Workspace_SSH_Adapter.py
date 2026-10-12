@@ -154,3 +154,58 @@ def export_verified_ssh_evidence(operation, output_dir, run_label, payload):
     finally:
         if staging is not None:
             staging.unlink(missing_ok=True)
+
+
+def package_verified_ssh_bundle(operation, output, assessment_id, run_id, node_id,
+                                network_path, credentialed_paths, manifest_path=None):
+    """Build the official portable bundle from already verified private evidence.
+
+    Internal operator-controlled paths only; no scanner, import, or HTTP route.
+    Staging and exclusive publication prevent replacing unrelated outputs.
+    """
+    import os
+    import tempfile
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "evidence_bundle"))
+    import P01_Evidence_Bundle as bundles
+
+    pg.require(type(operation) is coordinator.Operation, "workspace_input_invalid")
+    destination = Path(output)
+    pg.require(destination.suffix == ".p01bundle" and destination.parent.is_dir()
+               and not destination.parent.is_symlink()
+               and not destination.exists(), "workspace_input_invalid")
+    pg.require(type(credentialed_paths) in (list, tuple) and
+               len(credentialed_paths) == 1, "workspace_input_invalid")
+    operation.check()
+    with tempfile.TemporaryDirectory(prefix=".canca-r02-bundle-", dir=destination.parent) as temp:
+        staged = Path(temp) / destination.name
+        result = bundles.create_bundle(
+            staged, assessment_id, run_id, node_id, Path(network_path),
+            [Path(p) for p in credentialed_paths],
+            Path(manifest_path) if manifest_path is not None else None,
+            require_evidence_sidecars=True)
+        operation.check()
+        verified = bundles.validate_bundle(staged)
+        pg.require(verified.get("bundle_id") == result["bundle_id"],
+                   "workspace_input_invalid")
+        operation.check()
+        sidecar = destination.with_suffix(destination.suffix + ".sha256")
+        pg.require(not sidecar.exists(), "workspace_input_invalid")
+        owned = []
+        try:
+            # Both hard links use exclusive create semantics. Remove any owned
+            # partial pair when a cancellation or write failure occurs.
+            os.link(staged, destination)
+            owned.append(destination)
+            operation.check()
+            os.link(staged.with_suffix(staged.suffix + ".sha256"), sidecar)
+            owned.append(sidecar)
+            operation.check()
+            return {"workspace_id": operation.token.workspace_id,
+                    "generation": operation.token.generation,
+                    "bundle_id": result["bundle_id"],
+                    "bundle_sha256": result["bundle_sha256"],
+                    "artifact_count": result["artifact_count"]}
+        except BaseException:
+            for item in reversed(owned):
+                item.unlink(missing_ok=True)
+            raise
