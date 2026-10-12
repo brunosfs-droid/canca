@@ -125,6 +125,25 @@ class ServicePostgreSQLTests(unittest.TestCase):
             self.assertEqual(plan['generation'],self.token.generation)
             result=adapter.apply_import(self.conn,self.token,plan['plan_id'],'apply-service')
             self.assertEqual(result['revision'],1);self.assertFalse(self.c._jobs)
+    def test_atomic_verified_import_uses_existing_sql_fence(self):
+        store,directory=assets.fixture(self.assetbase/'atomic-evidence')
+        adapter=service.WorkspaceService(self.c,service.SourceRoots({'A':store}))
+        with self.role('canca_ws_writer'):
+            result=adapter.commit_verified_bundle(
+                self.conn,self.token,'LAB-001',directory.name,'atomic-evidence-1')
+            self.assertEqual(result['workspace_id'],'A')
+            self.assertEqual(result['generation'],self.token.generation)
+            self.assertEqual(result['status'],'applied')
+            self.assertFalse(self.c._jobs)
+            replay=adapter.commit_verified_bundle(
+                self.conn,self.token,'LAB-001',directory.name,'atomic-evidence-1')
+            self.assertTrue(replay.get('replayed') or replay.get('status')=='already_imported')
+            self.c.close(self.conn,'A',self.c.generation)
+            self.c.open(self.conn,'B',self.c.generation)
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_generation_stale'):
+                adapter.commit_verified_bundle(
+                    self.conn,self.token,'LAB-001',directory.name,'atomic-evidence-stale')
+
     def test_categories_real_sql_revision_and_role_isolation(self):
         adapter=self.adapter()
         self.create('server','host')
