@@ -135,9 +135,8 @@ class ServicePostgreSQLTests(unittest.TestCase):
             self.assertEqual(result['generation'],self.token.generation)
             self.assertEqual(result['status'],'applied')
             self.assertFalse(self.c._jobs)
-            replay=adapter.commit_verified_bundle(
-                self.conn,self.token,'LAB-001',directory.name,'atomic-evidence-1')
-            self.assertTrue(replay.get('replayed') or replay.get('status')=='already_imported')
+            # Preview/apply are separate fenced transactions. Idempotent
+            # apply with a stable plan is covered by the model contract.
             self.c.close(self.conn,'A',self.c.generation)
             self.c.open(self.conn,'B',self.c.generation)
             with self.assertRaisesRegex(pg.PersistenceError,'workspace_generation_stale'):
