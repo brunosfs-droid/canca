@@ -19,3 +19,7 @@ Unexpected network probing, secret exposure, relaxed RLS, missing audit records,
 ## Acceptance
 
 A PASS requires the target environment, command/output evidence, hashes, independent reviewer and successful negative tests. Existing synthetic same-cluster checks do not satisfy the independent cross-cluster gate. E0-08 remains NOT RUN until operated.
+
+## Required failure injection and negative control
+
+Repeat on a disposable target with (a) missing raw evidence, (b) corrupted evidence hash, (c) a revoked SQL role and (d) stale workspace generation. All must be denied without partial activation. Compare original and restored inventory counts, role grants, collection receipt digests and workspace revisions. Store evidence outside the public repository.
