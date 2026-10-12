@@ -13,6 +13,8 @@ class InterfaceInventoryTests(unittest.TestCase):
                 inventory.reader,"read_verified_interfaces",return_value=[{"interface_alias":"eth0"}]) as read:
             result=inventory.inventory(Path("."),Path("."),limit=1)
             self.assertEqual(result["sources"],1)
+            self.assertEqual(result["persistence_state"],"not_persisted")
+            self.assertEqual(result["topology_edges_created"],0)
             self.assertEqual(len(result["interfaces"]),1)
             read.assert_called_once()
 
