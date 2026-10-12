@@ -281,7 +281,10 @@ class ServicePostgreSQLTests(unittest.TestCase):
                 and any(ref['path'] in signal['sources'] for ref in refs)
                 for signals,refs in rows for signal in signals))
             self.c.close(self.conn,'A',self.c.generation)
-            self.c.open(self.conn,'B',self.c.generation)
+            b_token=self.c.open(self.conn,'B',self.c.generation)
+            with model.scope(self.conn,'B',b_token):
+                self.assertEqual(self.conn.execute(
+                    'SELECT count(*) FROM canca.workspace_observations').fetchone()[0],0)
             with self.assertRaisesRegex(pg.PersistenceError,'workspace_generation_stale'):
                 adapter.commit_verified_ssh_bundle(
                     self.conn,self.token,'LAB-001',directory.name,'ssh-stale')
