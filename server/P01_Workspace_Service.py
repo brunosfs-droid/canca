@@ -120,6 +120,21 @@ class WorkspaceService:
         return self._call(actor,token,'workspace:write',model.relationship,*args,**fields)
     def apply_import(self,actor,token,plan_id,request_id):
         return self._call(actor,token,'workspace:write',model.apply_import,plan_id,request_id)
+    def verified_network_observations(self,actor,token,assessment_id,bundle_id):
+        """Read network signals from a verified workspace-owned import only.
+
+        No graph edges or identity ownership are inferred from IP/MAC evidence.
+        """
+        import P01_Observed_Network as network
+        with self.coordinator.borrow(actor,token,'workspace:read') as operation:
+            operation.check()
+            projection=self.sources.prepare(token.workspace_id,assessment_id,bundle_id)
+            operation.check()
+            candidates=network.project_verified_network_observations(projection)
+            operation.check()
+            return dict(workspace_id=token.workspace_id,generation=token.generation,
+                        bundle_id=bundle_id,observations=candidates)
+
     def preview_import(self,actor,token,assessment_id,bundle_id,**selection):
         with self.coordinator.borrow(actor,token,'workspace:write') as operation:
             projection=self.sources.prepare(token.workspace_id,assessment_id,bundle_id)
