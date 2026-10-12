@@ -205,6 +205,24 @@ class ModelPostgreSQLTests(unittest.TestCase):
         self.assertEqual(self.conn.execute('SELECT count(*) FROM canca.workspace_objects').fetchone()[0],0)
         self.assertEqual(self.conn.execute('SELECT object_id,decision FROM canca.workspace_observations').fetchone(),(None,'evidence_only'))
 
+    def test_persisted_network_signals_are_scoped_and_provenance_bound(self):
+        self.apply(self.source(),mode='evidence_only')
+        with self.role('canca_ws_writer'):
+            result=model.persisted_network_observations(self.conn,'A',self.token)
+            self.assertEqual(result['status'],'network_observations')
+            self.assertTrue(any(s['kind']=='ip' and s['value']=='192.0.2.10'
+                                and s['source_paths'] for s in result['observations']))
+            self.assertTrue(all(not s['graph_edges'] and not s['ownership_confirmed']
+                                for s in result['observations']))
+            with self.assertRaisesRegex(pg.PersistenceError,'model_input_invalid'):
+                model.persisted_network_observations(self.conn,'A',self.token,limit=101)
+            self.c.close(self.conn,'A',self.token.generation)
+            next_token=self.c.open(self.conn,'B',self.c.generation)
+            other=model.persisted_network_observations(self.conn,'B',next_token)
+            self.assertEqual(other['observations'],[])
+            with self.assertRaises(pg.PersistenceError):
+                model.persisted_network_observations(self.conn,'A',self.token)
+
     def test_manual_declared_and_observed_conflict_remain_visible(self):
         self.create('manual',attributes={'fqdn':'manual.example.test'})
         self.apply(self.source(),decisions={0:{'action':'link','object_id':'manual','reason':'Reviewed device identity'}})
