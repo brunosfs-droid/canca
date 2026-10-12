@@ -145,6 +145,28 @@ class WorkspaceService:
                         revision=evidence['revision'],prefix_length=prefix_length,
                         candidates=candidates)
 
+    def verified_interface_observations(self,actor,token,assessment_id,bundle_id,
+                                        enrichment,source_path,source_sha256):
+        """Private, workspace-fenced interface projection from verified artifacts.
+
+        A caller-supplied payload is never accepted as proven merely by shape:
+        source path/hash must be present in the verified workspace projection.
+        """
+        import P01_Observed_Interfaces as interfaces
+        with self.coordinator.borrow(actor,token,'workspace:read') as operation:
+            operation.check()
+            projection=self.sources.prepare(token.workspace_id,assessment_id,bundle_id)
+            operation.check()
+            refs=[ref for obs in projection['observations']
+                  for ref in obs['source_refs']
+                  if ref['role']=='credentialed_evidence'
+                  and ref['path']==source_path and ref['sha256']==source_sha256]
+            pg.require(bool(refs),'workspace_input_invalid')
+            rows=interfaces.project_interfaces(enrichment,source_path,source_sha256)
+            operation.check()
+            return dict(workspace_id=token.workspace_id,generation=token.generation,
+                        bundle_id=bundle_id,interfaces=rows)
+
     def verified_network_observations(self,actor,token,assessment_id,bundle_id):
         """Read network signals from a verified workspace-owned import only.
 
