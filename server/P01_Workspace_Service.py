@@ -236,6 +236,16 @@ class WorkspaceService:
             operation.check()
             return result
 
+    def ssh_export_verified(self,actor,token,output_dir,run_label,payload):
+        """Internal private evidence staging, fenced by workspace write lease."""
+        import P01_Workspace_SSH_Adapter as ssh_adapter
+        with self.coordinator.borrow(actor,token,'workspace:write') as operation:
+            operation.check()
+            result=ssh_adapter.export_verified_ssh_evidence(
+                operation,output_dir,run_label,payload)
+            operation.check()
+            return result
+
     def ssh_read_only(self,actor,token,client,*,timeout=5.0):
         """Trusted internal SSH adapter; caller owns authenticated transport."""
         import P01_Workspace_SSH_Adapter as ssh_adapter
