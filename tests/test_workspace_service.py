@@ -47,6 +47,25 @@ class RegisteredOperationTests(unittest.TestCase):
     cleanup=coordinator.CoordinatorTests.cleanup
     opened=coordinator.CoordinatorTests.opened
     def adapter(self):return service.WorkspaceService(self.c,service.SourceRoots({}))
+    def test_private_ssh_export_requires_workspace_write_and_tracks_job(self):
+        token=self.opened()
+        adapter=self.adapter()
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
+                adapter.ssh_export_verified('reader',token,directory,'lab',{'status':'collected'})
+            self.assertEqual(list(Path(directory).iterdir()),[])
+            result=adapter.ssh_export_verified('writer',token,directory,'lab',
+                                               {'status':'collected'})
+            self.assertEqual(result['workspace_id'],'A')
+            self.assertEqual(result['generation'],token.generation)
+            self.assertTrue((Path(directory)/result['filename']).is_file())
+            self.assertFalse(self.c._jobs)
+            self.c.close('writer','A',token.generation,timeout=0)
+            self.opened('B')
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_generation_stale'):
+                adapter.ssh_export_verified('writer',token,directory,'late',{})
+            self.assertEqual(len(list(Path(directory).iterdir())),1)
+
     def test_read_is_registered_and_postcheck_suppresses_revoked_result(self):
         token=self.opened();adapter=self.adapter()
         def read(*args,**kwargs):
