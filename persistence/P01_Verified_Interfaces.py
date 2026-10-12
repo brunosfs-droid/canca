@@ -25,7 +25,8 @@ def read_verified_interfaces(store, import_dir, source_path, source_sha256):
     with zipfile.ZipFile(raw_path) as archive:
         entry=matches[0]
         pg.require(entry["size_bytes"]<=16*1024**2,"asset_input_invalid")
-        raw=archive.read(entry["path"])
+        with archive.open(entry["path"]) as source:
+            raw=source.read(entry["size_bytes"]+1)
     pg.require(len(raw)==entry["size_bytes"] and hashlib.sha256(raw).hexdigest()==source_sha256,
                "bundle_integrity_failed")
     doc=pg.read_json(raw)
