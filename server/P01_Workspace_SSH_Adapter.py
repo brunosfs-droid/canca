@@ -83,6 +83,11 @@ def authenticate(operation, target, port, profile_match, known_hosts, *,
     pg.require(address.version == 4 and address.is_private and
                type(port) is int and 1 <= port <= 65535,
                "workspace_input_invalid")
+    # Bound socket/banner/auth and command I/O before resolving any secret.
+    for limit in (connect_timeout, command_timeout):
+        pg.require(type(limit) in (int, float) and 0.5 <= limit <= 30.0,
+                   "workspace_input_invalid")
+    pg.require(type(collect_commands) is bool, "workspace_input_invalid")
     operation.check()
     attempt, evidence = ssh.connect_with_profile(
         target, port, profile_match, Path(known_hosts), "strict",
