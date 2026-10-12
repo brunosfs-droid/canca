@@ -35,6 +35,15 @@ class ExportGateTests(unittest.TestCase):
                     adapter.export_verified_ssh_evidence(operation,td,"lab",{"status":"collected"})
                 self.assertEqual(item.read_bytes(),original)
 
+    def test_invalid_output_folder_rejected_before_write(self):
+        token=self.opened()
+        with tempfile.TemporaryDirectory() as td:
+            folder=Path(td)/"not-created"
+            with self.c.borrow("writer",token,"workspace:write") as operation:
+                with self.assertRaises(service.pg.PersistenceError):
+                    adapter.export_verified_ssh_evidence(operation,folder,"lab",{"ok":True})
+            self.assertFalse(folder.exists())
+
 
 if __name__=="__main__":
     unittest.main()
