@@ -1,6 +1,7 @@
 """R02 fenced real SSH family adapter: deterministic blocked I/O, no network."""
 import sys
 import threading
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -18,6 +19,39 @@ class SSHCoordinatorTests(unittest.TestCase):
     setUp = fixtures.CoordinatorTests.setUp
     cleanup = fixtures.CoordinatorTests.cleanup
     opened = fixtures.CoordinatorTests.opened
+
+    def test_fenced_private_ssh_evidence_export_and_cleanup(self):
+        token = self.opened()
+        with tempfile.TemporaryDirectory() as directory:
+            with self.c.borrow("writer", token, "workspace:write") as op:
+                receipt = adapter.export_verified_ssh_evidence(
+                    op, directory, "lab-ssh", {"collection_status": "collected"})
+                path = Path(directory) / receipt["filename"]
+                self.assertTrue(path.is_file())
+                self.assertFalse(receipt["bundle_created"])
+                self.assertEqual(receipt["workspace_id"], "A")
+                self.assertEqual(list(Path(directory).glob("*.tmp")), [])
+            self.c.close("writer", "A", token.generation, timeout=0)
+            self.opened("B")
+            with self.assertRaisesRegex(pg.PersistenceError, "workspace_generation_stale"):
+                with self.c.borrow("writer", token, "workspace:write") as op:
+                    adapter.export_verified_ssh_evidence(op, directory, "old", {})
+
+    def test_cancel_between_export_write_and_publish_removes_artifact(self):
+        token = self.opened()
+        with tempfile.TemporaryDirectory() as directory:
+            with self.c.borrow("writer", token, "workspace:write") as op:
+                before = op.check
+                count = [0]
+                def cancelled_after_write():
+                    count[0] += 1
+                    if count[0] >= 3:
+                        raise pg.PersistenceError("workspace_generation_stale")
+                    return before()
+                with patch.object(op, "check", side_effect=cancelled_after_write):
+                    with self.assertRaisesRegex(pg.PersistenceError, "workspace_generation_stale"):
+                        adapter.export_verified_ssh_evidence(op, directory, "lab", {"a": 1})
+                self.assertEqual(list(Path(directory).iterdir()), [])
 
     def test_live_ssh_families_are_bound_to_workspace(self):
         token = self.opened()
