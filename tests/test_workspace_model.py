@@ -386,6 +386,35 @@ class ModelPostgreSQLTests(unittest.TestCase):
                 self.assertEqual(self.conn.execute(
                     'SELECT count(*) FROM canca.workspace_collections').fetchone()[0],0)
 
+    def test_mid_insert_fault_retries_once_without_duplicate_observations(self):
+        projection=self.source(extras=[{'ip':'192.0.2.11','hostname':'extra.corp.example.test'}])
+        self.assertGreaterEqual(len(projection['observations']),2)
+        with self.role('canca_ws_writer'):
+            plan=model.preview_import(self.conn,'A',self.token,projection,
+                                      mode='evidence_only',categories=('identity',))
+            execute=self.conn.execute
+            observed=[0]
+            def fail_once(sql,params=None,*args,**kwargs):
+                if 'INSERT INTO canca.workspace_observations' in str(sql):
+                    observed[0]+=1
+                    if observed[0]==2:
+                        raise pg.PersistenceError('synthetic_retryable_insert_fault')
+                return execute(sql,params,*args,**kwargs)
+            with patch.object(self.conn,'execute',side_effect=fail_once):
+                with self.assertRaisesRegex(pg.PersistenceError,'synthetic_retryable_insert_fault'):
+                    model.apply_import(self.conn,'A',self.token,plan['plan_id'],'r02-retry')
+            self.assertEqual(observed[0],2)
+            completed=model.apply_import(self.conn,'A',self.token,plan['plan_id'],'r02-retry')
+            replayed=model.apply_import(self.conn,'A',self.token,plan['plan_id'],'r02-retry')
+            self.assertEqual(completed,replayed)
+            self.assertEqual(completed['status'],'applied')
+            with model.scope(self.conn,'A',self.token):
+                self.assertEqual(self.conn.execute(
+                    'SELECT count(*) FROM canca.workspace_observations').fetchone()[0],
+                    len(projection['observations']))
+                self.assertEqual(self.conn.execute(
+                    "SELECT count(*) FROM canca.workspace_model_requests WHERE request_id='r02-retry'").fetchone()[0],1)
+
     def test_runtime_loss_before_scope_exit_rolls_back_all_model_rows(self):
         actor=pg.open_connection();self.addCleanup(actor.close);actor.execute('SET ROLE canca_ws_writer')
         pid=self.c.lease.conn.info.backend_pid
