@@ -236,7 +236,7 @@ class ModelPostgreSQLTests(unittest.TestCase):
             self.assertEqual(
                 model.persisted_network_observations(
                     self.conn,'A',self.token,source_asset_id='missing-asset')['observations'],[])
-            for invalid in ('', 'a'*257, 'bad\\nasset', 12, True):
+            for invalid in ('', 'a'*257, 'bad'+chr(10)+'asset', 12, True):
                 with self.subTest(invalid=invalid),self.assertRaisesRegex(
                         pg.PersistenceError,'model_input_invalid'):
                     model.persisted_network_observations(
