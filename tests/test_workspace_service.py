@@ -168,6 +168,24 @@ class RegisteredOperationTests(unittest.TestCase):
             collector.assert_called_once()
             self.assertFalse(self.c._jobs)
 
+    def test_imported_interface_reader_checks_workspace_before_bundle_access(self):
+        token=self.opened()
+        adapter=self.adapter()
+        with patch.object(adapter.sources,'prepare',return_value={}) as prepare,patch(
+                'P01_Verified_Interfaces.read_verified_interfaces',return_value=[]) as reader:
+            # SourceRoots({}) has no configured root: verified reader must fail closed.
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
+                adapter.imported_interface_observations('reader',token,'LAB-001',
+                    'bnd-'+'a'*20,'evidence.json','a'*64)
+            reader.assert_not_called()
+        self.c.close('writer','A',token.generation,timeout=0)
+        self.opened('B')
+        with patch('P01_Verified_Interfaces.read_verified_interfaces') as reader:
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_generation_stale'):
+                adapter.imported_interface_observations('reader',token,'LAB-001',
+                    'bnd-'+'a'*20,'evidence.json','a'*64)
+            reader.assert_not_called()
+
     def test_read_is_registered_and_postcheck_suppresses_revoked_result(self):
         token=self.opened();adapter=self.adapter()
         def read(*args,**kwargs):
