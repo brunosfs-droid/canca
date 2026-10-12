@@ -27,6 +27,15 @@ class ProvenanceContractTests(unittest.TestCase):
             right=model.prepare_source(store,directory)
             self.assertEqual(left["observations"],right["observations"])
 
+    def test_wrong_source_hash_rejected_even_with_valid_shape(self):
+        with tempfile.TemporaryDirectory() as td:
+            store,directory=assets.fixture(Path(td)/"fixture")
+            projection=model.prepare_source(store,directory)
+            forged=copy.deepcopy(projection)
+            forged["observations"][0]["source_refs"][0]["sha256"]="0"*64
+            with self.assertRaises(model.pg.PersistenceError):
+                model.validate_source(forged)
+
 
 if __name__=="__main__":
     unittest.main()
