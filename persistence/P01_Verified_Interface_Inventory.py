@@ -15,4 +15,5 @@ def inventory(store, import_dir, *, limit=100):
     for path,sha in refs:
         rows.extend(reader.read_verified_interfaces(store,import_dir,path,sha))
         pg.require(len(rows)<=6400,"asset_input_invalid")
-    return {"sources":len(refs),"interfaces":rows}
+    return {"sources":len(refs),"interfaces":rows,"persistence_state":"not_persisted",
+            "topology_edges_created":0}
