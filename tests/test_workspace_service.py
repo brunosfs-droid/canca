@@ -98,6 +98,31 @@ class RegisteredOperationTests(unittest.TestCase):
                 adapter.ssh_export_verified('writer',token,directory,'late',{})
             self.assertEqual(len(list(Path(directory).iterdir())),1)
 
+    def test_verified_network_read_is_fenced_and_preserves_provenance(self):
+        token=self.opened()
+        adapter=self.adapter()
+        projected={'observations':[{'source_asset_id':'asset-1','signals':[],
+                                    'source_refs':[]}],'import':{}}
+        with patch.object(adapter.sources,'prepare',return_value=projected) as source,patch(
+                'P01_Observed_Network.project_verified_network_observations',
+                return_value=[{'source_asset_id':'asset-1','kind':'ip',
+                               'value':'192.0.2.10','source_paths':['network.json'],
+                               'origin':'observed','graph_edges':[],
+                               'ownership_confirmed':False}]) as projection:
+            result=adapter.verified_network_observations('reader',token,'LAB-001',
+                                                         'bnd-'+'a'*20)
+            self.assertEqual(result['workspace_id'],'A')
+            self.assertEqual(result['generation'],token.generation)
+            self.assertEqual(result['observations'][0]['source_paths'],['network.json'])
+            source.assert_called_once_with('A','LAB-001','bnd-'+'a'*20)
+            projection.assert_called_once_with(projected)
+            self.assertFalse(self.c._jobs)
+            self.c.close('writer','A',token.generation,timeout=0)
+            self.opened('B')
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_generation_stale'):
+                adapter.verified_network_observations('reader',token,'LAB-001','bnd-'+'a'*20)
+            source.assert_called_once()
+
     def test_read_is_registered_and_postcheck_suppresses_revoked_result(self):
         token=self.opened();adapter=self.adapter()
         def read(*args,**kwargs):
