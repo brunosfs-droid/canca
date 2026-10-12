@@ -21,3 +21,7 @@
 8. E0-09 audit/redaction and E0-10 rollback/reproducibility.
 
 For each gate save test ID, exact commit, environment version, UTC, command (redacted), actual outcome, SHA-256 evidence hash, independent reviewer and issue reference. Record FAIL/BLOCKED/NOT RUN accurately; do not set PASS based solely on automation. Stop immediately on unintended probing, secret disclosure, workspace leakage or cancellation failure.
+
+## Evidence naming and gate ownership
+
+For each E0-XX gate, use a restricted evidence directory named after the exact candidate commit and gate ID. Store a redacted log, SHA256 manifest, operator timestamp, independent reviewer decision and issue ID for failures. Never include authentication secrets or private topology in the public repository.
