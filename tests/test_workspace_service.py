@@ -123,6 +123,33 @@ class RegisteredOperationTests(unittest.TestCase):
                 adapter.verified_network_observations('reader',token,'LAB-001','bnd-'+'a'*20)
             source.assert_called_once()
 
+    def test_subnet_candidates_use_only_persisted_workspace_evidence(self):
+        token=self.opened()
+        adapter=self.adapter()
+        evidence={'revision':0,'observations':[
+            {'kind':'ip','origin':'observed','source_asset_id':'asset-1',
+             'value':'192.0.2.10','source_paths':['network.json']},
+            {'kind':'mac','origin':'observed','source_asset_id':'asset-1',
+             'value':'aa:bb:cc:dd:ee:ff','source_paths':['network.json']}]}
+        with patch.object(model,'persisted_network_observations',
+                          return_value=evidence) as read:
+            result=adapter.observed_subnet_candidates('reader',token,prefix_length=24,
+                                                      source_asset_id='asset-1')
+            self.assertEqual(len(result['candidates']),1)
+            self.assertEqual(result['candidates'][0]['candidate_subnet'],'192.0.2.0/24')
+            self.assertIsNone(result['candidates'][0]['vlan_id'])
+            self.assertEqual(result['candidates'][0]['graph_edges'],[])
+            read.assert_called_once()
+            self.assertFalse(self.c._jobs)
+        with self.assertRaisesRegex(pg.PersistenceError,'workspace_input_invalid'):
+            adapter.observed_subnet_candidates('reader',token,prefix_length=True)
+        self.c.close('writer','A',token.generation,timeout=0)
+        self.opened('B')
+        with patch.object(model,'persisted_network_observations') as read:
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_generation_stale'):
+                adapter.observed_subnet_candidates('reader',token,prefix_length=24)
+            read.assert_not_called()
+
     def test_read_is_registered_and_postcheck_suppresses_revoked_result(self):
         token=self.opened();adapter=self.adapter()
         def read(*args,**kwargs):

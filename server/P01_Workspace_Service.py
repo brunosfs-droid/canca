@@ -125,6 +125,26 @@ class WorkspaceService:
         return self._call(actor,token,'workspace:read',
                           model.persisted_network_observations,limit=limit,source_asset_id=source_asset_id)
 
+    def observed_subnet_candidates(self,actor,token,*,prefix_length,limit=100,
+                                   source_asset_id=None):
+        """Workspace-RLS observed IPv4 only; caller prefix cannot assert a VLAN."""
+        import P01_Observed_Subnets as subnets
+        pg.require(type(prefix_length) is int and 0<=prefix_length<=32,
+                   'workspace_input_invalid')
+        with self.coordinator.borrow(actor,token,'workspace:read') as operation:
+            operation.check()
+            evidence=model.persisted_network_observations(
+                actor,token.workspace_id,token,limit=limit,
+                source_asset_id=source_asset_id)
+            operation.check()
+            candidates=subnets.subnet_candidates(
+                [item for item in evidence['observations'] if item['kind']=='ip'],
+                prefix_length=prefix_length)
+            operation.check()
+            return dict(workspace_id=token.workspace_id,generation=token.generation,
+                        revision=evidence['revision'],prefix_length=prefix_length,
+                        candidates=candidates)
+
     def verified_network_observations(self,actor,token,assessment_id,bundle_id):
         """Read network signals from a verified workspace-owned import only.
 
