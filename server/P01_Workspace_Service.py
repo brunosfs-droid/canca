@@ -145,6 +145,22 @@ class WorkspaceService:
                         revision=evidence['revision'],prefix_length=prefix_length,
                         candidates=candidates)
 
+    def imported_interface_observations(self,actor,token,assessment_id,bundle_id,
+                                        source_path,source_sha256):
+        """Project only independently reverified imported credentialed artifacts."""
+        import P01_Verified_Interfaces as verified
+        with self.coordinator.borrow(actor,token,'workspace:read') as operation:
+            operation.check()
+            # SourceRoots also establishes the current workspace's trusted root.
+            self.sources.prepare(token.workspace_id,assessment_id,bundle_id)
+            operation.check()
+            root=self.sources._roots[token.workspace_id]
+            import_dir=root/'assessments'/assessment_id/'imports'/bundle_id
+            rows=verified.read_verified_interfaces(root,import_dir,source_path,source_sha256)
+            operation.check()
+            return dict(workspace_id=token.workspace_id,generation=token.generation,
+                        bundle_id=bundle_id,interfaces=rows)
+
     def verified_interface_observations(self,actor,token,assessment_id,bundle_id,
                                         enrichment,source_path,source_sha256):
         """Private, workspace-fenced interface projection from verified artifacts.
