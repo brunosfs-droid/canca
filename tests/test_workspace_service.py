@@ -47,6 +47,17 @@ class RegisteredOperationTests(unittest.TestCase):
     cleanup=coordinator.CoordinatorTests.cleanup
     opened=coordinator.CoordinatorTests.opened
     def adapter(self):return service.WorkspaceService(self.c,service.SourceRoots({}))
+    def test_ssh_package_does_not_call_packager_after_revocation(self):
+        token=self.opened()
+        adapter=self.adapter()
+        self.grants['writer'].discard(('A','workspace:write'))
+        with patch('P01_Workspace_SSH_Adapter.package_verified_ssh_bundle') as package:
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
+                adapter.ssh_package_verified('writer',token,'bundle.p01bundle',
+                    'LAB-001','R1','NODE-01','network.json',['evidence.json'])
+            package.assert_not_called()
+        self.assertFalse(self.c._jobs)
+
     def test_ssh_package_requires_write_and_fences_stale_generation(self):
         token=self.opened()
         adapter=self.adapter()
