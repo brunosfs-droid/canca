@@ -158,6 +158,15 @@ class WorkspaceService:
             directory=root/'assessments'/assessment_id/'imports'/bundle_id
             result=inventory.inventory(root,directory,limit=limit)
             operation.check()
+            import P01_Interface_Observation_Identity as identity
+            grouped={}
+            for item in result['interfaces']:
+                grouped.setdefault(item['source_sha256'],[]).append(item)
+            observed=[]
+            for sha256,items in grouped.items():
+                observed.extend(identity.observation_keys(token.workspace_id,bundle_id,sha256,items))
+            operation.check()
+            result=dict(result,interfaces=observed)
             return dict(result,workspace_id=token.workspace_id,
                         generation=token.generation,bundle_id=bundle_id)
 

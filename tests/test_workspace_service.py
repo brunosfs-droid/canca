@@ -150,6 +150,23 @@ class RegisteredOperationTests(unittest.TestCase):
                 adapter.observed_subnet_candidates('reader',token,prefix_length=24)
             read.assert_not_called()
 
+    def test_verified_interface_inventory_attaches_collection_scoped_ids(self):
+        token=self.opened()
+        adapter=self.adapter()
+        row=dict(interface_ordinal=0,interface_alias='eth0',address='192.0.2.10',
+                 prefix_length=24,source_sha256='a'*64,source_path='ssh.json')
+        with patch.object(adapter.sources,'prepare',return_value={}),patch.dict(
+                adapter.sources._roots,{'A':Path('/tmp')}),patch(
+                'P01_Verified_Interface_Inventory.inventory',
+                return_value={'interfaces':[row],'sources':1,'persistence_state':'not_persisted',
+                              'topology_edges_created':0}):
+            result=adapter.verified_interface_inventory('reader',token,'LAB-001',
+                                                         'bnd-'+'a'*20,limit=1)
+            self.assertTrue(result['interfaces'][0]['observation_id'].startswith('ifobs-'))
+            self.assertEqual(result['interfaces'][0]['workspace_id'],'A')
+            self.assertEqual(result['interfaces'][0]['identity_scope'],'observation_only')
+            self.assertEqual(result['topology_edges_created'],0)
+
     def test_verified_interface_inventory_denies_stale_generation_before_read(self):
         token=self.opened()
         adapter=self.adapter()
