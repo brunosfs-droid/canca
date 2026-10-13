@@ -186,7 +186,7 @@ class RegisteredOperationTests(unittest.TestCase):
                 'P01_Interface_SQL_Writer.persist_verified_interfaces') as writer:
             with self.assertRaisesRegex(pg.PersistenceError,'workspace_generation_stale'):
                 adapter.persist_verified_interface_inventory(
-                    'reader',token,'LAB-001','bnd-'+'a'*20,'batch-1')
+                    'writer',token,'LAB-001','bnd-'+'a'*20,'batch-1')
             source.assert_not_called()
             writer.assert_not_called()
 
