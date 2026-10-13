@@ -75,5 +75,24 @@ class WriterTests(unittest.TestCase):
                 writer.persist_verified_interfaces(conn,'A',token,Path('.'),Path('.'),'batch-1')
         conn.transaction.assert_called_once()
 
+    def test_sql_exception_rolls_back_transaction_context(self):
+        token=Mock()
+        entry=dict(interface_ordinal=0,interface_alias='eth0',address='192.0.2.10',
+                   prefix_length=24,source_path='ssh.json',source_sha256='a'*64)
+        projection={'observations':[{
+            'source_asset_id':'asset-1',
+            'source_refs':[dict(role='credentialed_evidence',path='ssh.json',sha256='a'*64)]
+        }]}
+        conn=MagicMock()
+        conn.execute.side_effect=RuntimeError('synthetic_sql_failure')
+        with patch.object(writer.model,'token_args'),patch.object(writer.inventory,'inventory',
+              return_value={'interfaces':[entry]}),patch.object(writer.inventory.registry,
+              'prepare_assets',return_value=projection),patch.object(writer.model,'scope'),patch.object(
+              writer.pg,'schema_check'):
+            with self.assertRaisesRegex(RuntimeError,'synthetic_sql_failure'):
+                writer.persist_verified_interfaces(conn,'A',token,Path('.'),Path('.'),'batch-1')
+        self.assertEqual(conn.execute.call_count,1)
+        self.assertIs(conn.transaction.return_value.__exit__.call_args.args[0],RuntimeError)
+
 if __name__=='__main__':
     unittest.main()
