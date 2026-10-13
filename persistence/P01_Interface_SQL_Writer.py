@@ -8,7 +8,7 @@ import P01_Workspace_Model as model
 import P01_Verified_Interface_Inventory as inventory
 import P01_Interface_Observation_Identity as identity
 
-def persist_verified_interfaces(conn, workspace_id, token, store, import_dir, collection_id, *, limit=100):
+def persist_verified_interfaces(conn, workspace_id, token, store, import_dir, collection_id, *, limit=100, before_commit=None):
     model.token_args(workspace_id,token)
     model.require(type(collection_id) is str and 1<=len(collection_id)<=256)
     model.require(type(limit) is int and 1<=limit<=100)
@@ -35,6 +35,7 @@ def persist_verified_interfaces(conn, workspace_id, token, store, import_dir, co
         matching=owners.get((item["source_path"],item["source_sha256"]),set())
         pg.require(len(matching)==1,"model_import_conflict")
         pending.append((item,next(iter(matching))))
+    pg.require(before_commit is None or callable(before_commit),'model_input_invalid')
     # All verified evidence is validated before the first database write.
     # The transaction rolls back the entire collection on any failure.
     inserted=0
@@ -63,5 +64,7 @@ def persist_verified_interfaces(conn, workspace_id, token, store, import_dir, co
                         "WHERE workspace_id=%s AND collection_id=%s AND observation_id=%s",
                         (workspace_id,collection_id,item["observation_id"])).fetchone()
                     pg.require(prior==values[3:],"model_import_conflict")
+            if before_commit is not None:
+                before_commit()
     return dict(status="persisted",workspace_id=workspace_id,
                 collection_id=collection_id,observation_count=len(rows),inserted_count=inserted)
