@@ -7,6 +7,20 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"persistence"))
 import P01_Interface_SQL_Writer as writer
 
 class WriterTests(unittest.TestCase):
+    def test_duplicate_observation_identity_fails_before_database_write(self):
+        token=Mock()
+        item=dict(interface_ordinal=0,interface_alias='eth0',address='192.0.2.10',
+                  prefix_length=24,source_path='ssh.json',source_sha256='a'*64)
+        conn=MagicMock()
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.inventory,'inventory',return_value={'interfaces':[item,item]}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value={'observations':[]}):
+            with self.assertRaisesRegex(writer.pg.PersistenceError,'model_import_conflict'):
+                writer.persist_verified_interfaces(conn,'A',token,Path('.'),
+                                                   Path('.'),'batch-1')
+        conn.execute.assert_not_called()
+        conn.transaction.assert_not_called()
+
     def test_prevalidates_source_mapping_before_connection(self):
         token=Mock()
         entry=dict(interface_ordinal=0,interface_alias='eth0',address='192.0.2.10',
