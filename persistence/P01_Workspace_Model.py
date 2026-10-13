@@ -376,6 +376,37 @@ def object_state(conn,workspace_id,token,object_id,*,expected_revision=None):
                     declarations=[dict(zip(('declaration_id','attribute','value','reason','author_role','created_revision'),d)) for d in declarations])
 
 
+def persisted_interface_ip_history(conn,workspace_id,token,*,limit=100):
+    """Read collected interface IP evidence already stored in observation history.
+
+    This is a read model over existing workspace_observations; it does not
+    create interface entities or infer device ownership.
+    """
+    require(type(limit) is int and 1<=limit<=100)
+    with scope(conn,workspace_id,token):
+        rows=conn.execute(
+            'SELECT collection_id,ordinal,source_asset_id,signals,source_refs '
+            'FROM canca.workspace_observations WHERE workspace_id=%s '
+            'ORDER BY collection_id,ordinal LIMIT %s',
+            (workspace_id,limit+1)).fetchall()
+        require(len(rows)<=limit)
+        observed=[]
+        for collection_id,ordinal,asset_id,signals,refs in rows:
+            verified={ref['path']:ref['sha256'] for ref in refs
+                      if ref['role']=='credentialed_evidence'}
+            for signal in signals:
+                if signal['kind']!='ip' or signal['qualified']:
+                    continue
+                for path in sorted(set(signal['sources']).intersection(verified)):
+                    observed.append(dict(collection_id=collection_id,ordinal=ordinal,
+                                         source_asset_id=asset_id,address=signal['value'],
+                                         source_path=path,source_sha256=verified[path],
+                                         identity_scope='observation_only',
+                                         ownership_confirmed=False,graph_edges=[]))
+        return dict(status='interface_ip_history',workspace_id=workspace_id,
+                    observations=observed)
+
+
 def persisted_network_observations(conn,workspace_id,token,*,limit=100,source_asset_id=None):
     """Read persisted, provenanced IP/MAC signals under workspace RLS.
 
