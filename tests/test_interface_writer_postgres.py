@@ -43,6 +43,33 @@ class InterfaceWriterSQLTests(unittest.TestCase):
             "SELECT count(*) FROM canca.workspace_interface_observations "
             "WHERE workspace_id='A' AND collection_id='batch-1'").fetchone()[0],1)
 
+    def test_actual_writer_rolls_back_first_insert_if_second_fails(self):
+        from contextlib import nullcontext
+        items=[dict(interface_ordinal=n,interface_alias='eth0',
+                    address='192.0.2.'+str(10+n),prefix_length=24,
+                    source_path='ssh.json',source_sha256='a'*64) for n in (0,1)]
+        projection={'observations':[{'source_asset_id':'asset-a',
+            'source_refs':[dict(role='credentialed_evidence',
+                                path='ssh.json',sha256='a'*64)]}]}
+        self.conn.execute(
+            "CREATE FUNCTION canca.reject_second_interface() RETURNS trigger "
+            "LANGUAGE plpgsql AS $ BEGIN IF NEW.interface_ordinal=1 THEN "
+            "RAISE EXCEPTION 'synthetic second row failure'; END IF; RETURN NEW; END $")
+        self.conn.execute(
+            "CREATE TRIGGER reject_second_interface BEFORE INSERT "
+            "ON canca.workspace_interface_observations FOR EACH ROW "
+            "EXECUTE FUNCTION canca.reject_second_interface()")
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.model,'scope',return_value=nullcontext()),patch.object(
+                writer.inventory,'inventory',return_value={'interfaces':items}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=projection):
+            with self.assertRaisesRegex(Exception,'synthetic second row failure'):
+                writer.persist_verified_interfaces(self.conn,'A',Mock(),Path('.'),
+                                                   Path('.'),'batch-rollback')
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM canca.workspace_interface_observations "
+            "WHERE collection_id='batch-rollback'").fetchone()[0],0)
+
     def test_failed_batch_rolls_back_every_record(self):
         rows=[("A","batch-1","ifobs-"+"a"*32,"asset-a","ssh.json","a"*64,0,
                "eth0","192.0.2.10",24),
