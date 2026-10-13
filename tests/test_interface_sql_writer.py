@@ -16,12 +16,14 @@ class WriterTests(unittest.TestCase):
             'source_refs':[dict(role='credentialed_evidence',path='ssh.json',sha256='a'*64)]
         }]}
         conn=Mock()
+        conn.execute.return_value.fetchone.return_value=('ifobs-'+'a'*32,)
         with patch.object(writer.model,'token_args'),patch.object(writer.inventory,'inventory',
               return_value={'interfaces':[entry]}),patch.object(writer.inventory.registry,
               'prepare_assets',return_value=projection),patch.object(writer.model,'scope') as scope,patch.object(
               writer.pg,'schema_check'):
             result=writer.persist_verified_interfaces(conn,'A',token,Path('.'),Path('.'),'batch-1')
             self.assertEqual(result['observation_count'],1)
+            self.assertEqual(result['inserted_count'],1)
             sql,args=conn.execute.call_args.args
             self.assertIn('workspace_interface_observations',sql)
             self.assertEqual(args[3],'asset-1')
