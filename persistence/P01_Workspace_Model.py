@@ -399,7 +399,7 @@ def persisted_network_observations(conn,workspace_id,token,*,limit=100,source_as
         require(len(rows)<=limit)
         observed=[]
         for collection_id,ordinal,source_id,signals,refs in rows:
-            network_refs={r['path'] for r in refs if r['role']=='network_discovery'}
+            network_refs={r['path'] for r in refs if r['role'] in ('network_discovery','credentialed_evidence')}
             for signal in signals:
                 if signal['kind'] not in ('ip','mac') or signal['qualified']:
                     continue
