@@ -53,8 +53,9 @@ class InterfaceWriterSQLTests(unittest.TestCase):
                                 path='ssh.json',sha256='a'*64)]}]}
         self.conn.execute(
             "CREATE FUNCTION canca.reject_second_interface() RETURNS trigger "
-            "LANGUAGE plpgsql AS $ BEGIN IF NEW.interface_ordinal=1 THEN "
-            "RAISE EXCEPTION 'synthetic second row failure'; END IF; RETURN NEW; END $")
+            "LANGUAGE plpgsql AS 'BEGIN IF NEW.interface_ordinal=1 THEN "
+            "RAISE EXCEPTION ''synthetic second row failure''; "
+            "END IF; RETURN NEW; END'")
         self.conn.execute(
             "CREATE TRIGGER reject_second_interface BEFORE INSERT "
             "ON canca.workspace_interface_observations FOR EACH ROW "
