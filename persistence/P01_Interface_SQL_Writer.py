@@ -26,7 +26,12 @@ def persist_verified_interfaces(conn, workspace_id, token, store, import_dir, co
             if ref["role"]=="credentialed_evidence":
                 owners.setdefault((ref["path"],ref["sha256"]),set()).add(obs["source_asset_id"])
     pending=[]
+    seen_ids=set()
     for item in rows:
+        # Duplicate IDs inside one verified batch are ambiguous, even when
+        # ON CONFLICT would otherwise silently turn them into a replay.
+        pg.require(item['observation_id'] not in seen_ids,'model_import_conflict')
+        seen_ids.add(item['observation_id'])
         matching=owners.get((item["source_path"],item["source_sha256"]),set())
         pg.require(len(matching)==1,"model_import_conflict")
         pending.append((item,next(iter(matching))))
