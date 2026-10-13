@@ -19,6 +19,31 @@ import test_postgres_assets as assets
 pg,ws,runtime=model.pg,model.ws,model.runtime
 
 
+class PersistedInterfaceReadTests(unittest.TestCase):
+    def test_only_credentialed_unqualified_ips_are_returned(self):
+        conn=Mock()
+        refs=[dict(role='credentialed_evidence',path='ssh.json',sha256='a'*64),
+              dict(role='network_discovery',path='network.json',sha256='b'*64)]
+        signals=[dict(kind='ip',value='192.0.2.10',qualified=False,sources=['ssh.json']),
+                 dict(kind='ip',value='192.0.2.20',qualified=False,sources=['network.json']),
+                 dict(kind='mac',value='00:11:22:33:44:55',qualified=False,sources=['ssh.json'])]
+        conn.execute.return_value.fetchall.return_value=[('batch-1',0,'asset-1',signals,refs)]
+        with patch.object(model,'scope') as scope:
+            scope.return_value.__enter__.return_value=1
+            result=model.persisted_interface_ip_history(conn,'A',Mock(),limit=10)
+        self.assertEqual(len(result['observations']),1)
+        self.assertEqual(result['observations'][0]['address'],'192.0.2.10')
+        self.assertEqual(result['observations'][0]['source_sha256'],'a'*64)
+        self.assertFalse(result['observations'][0]['ownership_confirmed'])
+        self.assertEqual(result['observations'][0]['graph_edges'],[])
+
+    def test_invalid_limit_is_rejected_before_sql(self):
+        conn=Mock()
+        with self.assertRaises(pg.PersistenceError):
+            model.persisted_interface_ip_history(conn,'A',Mock(),limit=True)
+        conn.execute.assert_not_called()
+
+
 class ModelInputTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
