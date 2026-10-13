@@ -14,7 +14,8 @@ class InterfaceMigrationContractTests(unittest.TestCase):
 
     def test_older_workspace_clients_accept_known_version_eleven(self):
         rows=pg.migration_prefix([],interfaces=True)
-        self.assertEqual(len(pg.migration_prefix(rows,intents=True)),10)
+        with self.assertRaisesRegex(pg.PersistenceError,'schema_mismatch'):
+            pg.migration_prefix(rows,intents=True)
         self.assertEqual(len(pg.migration_prefix(rows,interfaces=True)),11)
         tampered=list(rows)
         tampered[-1]=(11,"f"*64)
