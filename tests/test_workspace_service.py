@@ -155,7 +155,8 @@ class RegisteredOperationTests(unittest.TestCase):
         adapter=self.adapter()
         row=dict(interface_ordinal=0,interface_alias='eth0',address='192.0.2.10',
                  prefix_length=24,source_sha256='a'*64,source_path='ssh.json')
-        with patch.object(adapter.sources,'prepare',return_value={}),patch(
+        with patch.object(adapter.sources,'prepare',return_value={}),patch.dict(
+                adapter.sources._roots,{'A':Path('/tmp')}),patch(
                 'P01_Verified_Interface_Inventory.inventory',
                 return_value={'interfaces':[row],'sources':1,'persistence_state':'not_persisted',
                               'topology_edges_created':0}):
