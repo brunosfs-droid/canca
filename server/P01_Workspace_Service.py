@@ -163,7 +163,8 @@ class WorkspaceService:
             pg.require(root is not None,'workspace_access_denied')
             directory=root/'assessments'/assessment_id/'imports'/bundle_id
             result=writer.persist_verified_interfaces(
-                actor,token.workspace_id,token,root,directory,collection_id,limit=limit)
+                actor,token.workspace_id,token,root,directory,collection_id,
+                limit=limit,before_commit=operation.check)
             operation.check()
             return dict(result,generation=token.generation,bundle_id=bundle_id)
 
