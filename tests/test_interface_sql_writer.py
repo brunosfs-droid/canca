@@ -2,7 +2,7 @@
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import Mock,patch
+from unittest.mock import Mock,MagicMock,patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"persistence"))
 import P01_Interface_SQL_Writer as writer
 
@@ -15,7 +15,7 @@ class WriterTests(unittest.TestCase):
             'source_asset_id':'asset-1',
             'source_refs':[dict(role='credentialed_evidence',path='ssh.json',sha256='a'*64)]
         }]}
-        conn=Mock()
+        conn=MagicMock()
         conn.execute.return_value.fetchone.return_value=('ifobs-'+'a'*32,)
         with patch.object(writer.model,'token_args'),patch.object(writer.inventory,'inventory',
               return_value={'interfaces':[entry]}),patch.object(writer.inventory.registry,
@@ -45,7 +45,7 @@ class WriterTests(unittest.TestCase):
             'source_asset_id':'asset-1',
             'source_refs':[dict(role='credentialed_evidence',path='ssh.json',sha256='a'*64)]
         }]}
-        conn=Mock()
+        conn=MagicMock()
         prior=('asset-1','ssh.json','a'*64,0,'eth0','192.0.2.10',24)
         conn.execute.return_value.fetchone.side_effect=[None,prior]
         with patch.object(writer.model,'token_args'),patch.object(writer.inventory,'inventory',
@@ -64,7 +64,7 @@ class WriterTests(unittest.TestCase):
             'source_asset_id':'asset-1',
             'source_refs':[dict(role='credentialed_evidence',path='ssh.json',sha256='a'*64)]
         }]}
-        conn=Mock()
+        conn=MagicMock()
         conn.execute.return_value.fetchone.side_effect=[
             None,('DIFFERENT','ssh.json','a'*64,0,'eth0','192.0.2.10',24)]
         with patch.object(writer.model,'token_args'),patch.object(writer.inventory,'inventory',
