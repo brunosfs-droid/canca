@@ -92,6 +92,41 @@ class InterfaceWriterSQLTests(unittest.TestCase):
             "SELECT count(*) FROM canca.workspace_interface_observations "
             "WHERE collection_id='batch-rollback'").fetchone()[0],0)
 
+    def test_retry_after_sql_abort_recovers_without_partial_history(self):
+        from contextlib import nullcontext
+        items=[dict(interface_ordinal=n,interface_alias='eth0',
+                    address='192.0.2.'+str(10+n),prefix_length=24,
+                    source_path='ssh.json',source_sha256='a'*64) for n in (0,1)]
+        projection={'observations':[{'source_asset_id':'asset-a',
+            'source_refs':[dict(role='credentialed_evidence',
+                                path='ssh.json',sha256='a'*64)]}]}
+        calls=[0]
+        def fail_after_first():
+            calls[0]+=1
+            if calls[0]==1:
+                raise pg.PersistenceError('workspace_lease_lost')
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.model,'scope',return_value=nullcontext()),patch.object(
+                writer.inventory,'inventory',return_value={'interfaces':items}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=projection):
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_lease_lost'):
+                writer.persist_verified_interfaces(
+                    self.conn,'A',Mock(),Path('.'),Path('.'),'batch-recovery',
+                    before_commit=fail_after_first)
+            self.assertEqual(self.conn.execute(
+                "SELECT count(*) FROM canca.workspace_interface_observations "
+                "WHERE collection_id='batch-recovery'").fetchone()[0],0)
+            restored=writer.persist_verified_interfaces(
+                self.conn,'A',Mock(),Path('.'),Path('.'),'batch-recovery',
+                before_commit=fail_after_first)
+            replay=writer.persist_verified_interfaces(
+                self.conn,'A',Mock(),Path('.'),Path('.'),'batch-recovery')
+        self.assertEqual(restored['inserted_count'],2)
+        self.assertEqual(replay['inserted_count'],0)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM canca.workspace_interface_observations "
+            "WHERE collection_id='batch-recovery'").fetchone()[0],2)
+
     def test_failed_batch_rolls_back_every_record(self):
         rows=[("A","batch-1","ifobs-"+"a"*32,"asset-a","ssh.json","a"*64,0,
                "eth0","192.0.2.10",24),
