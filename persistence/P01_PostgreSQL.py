@@ -27,6 +27,7 @@ MODEL_MIGRATIONS = RUNTIME_MIGRATIONS + (SQL_PATH.with_name('0007_workspace_mode
 RECOVERY_MIGRATIONS = MODEL_MIGRATIONS + (SQL_PATH.with_name('0008_workspace_recovery_fence.sql'),)
 LEGACY_MIGRATIONS = RECOVERY_MIGRATIONS + (SQL_PATH.with_name('0009_workspace_legacy.sql'),)
 INTENT_MIGRATIONS = LEGACY_MIGRATIONS + (SQL_PATH.with_name('0010_workspace_intents.sql'),)
+INTERFACE_MIGRATIONS = INTENT_MIGRATIONS + (SQL_PATH.with_name('0011_workspace_interface_observations.sql'),)
 IDENTITY = ('assessment_id', 'run_id', 'node_id')
 ROLES = {'network_discovery', 'credentialed_evidence', 'assessment_manifest', 'asset_resolver'}
 ERRORS = {'input_invalid', 'receipt_integrity_failed', 'bundle_integrity_failed', 'identity_mismatch',
@@ -200,24 +201,24 @@ def timeout(conn):
     conn.execute("SET LOCAL statement_timeout = '30s'")
 
 
-def migration_prefix(rows, *, workspace=False, runtime=False, model=False, recovery=False, legacy=False, intents=False):
-    migrations = INTENT_MIGRATIONS if intents else LEGACY_MIGRATIONS if legacy else RECOVERY_MIGRATIONS if recovery else MODEL_MIGRATIONS if model else RUNTIME_MIGRATIONS if runtime else WORKSPACE_MIGRATIONS if workspace else MIGRATIONS
+def migration_prefix(rows, *, workspace=False, runtime=False, model=False, recovery=False, legacy=False, intents=False, interfaces=False):
+    migrations = INTERFACE_MIGRATIONS if interfaces else INTENT_MIGRATIONS if intents else LEGACY_MIGRATIONS if legacy else RECOVERY_MIGRATIONS if recovery else MODEL_MIGRATIONS if model else RUNTIME_MIGRATIONS if runtime else WORKSPACE_MIGRATIONS if workspace else MIGRATIONS
     expected = [(i, digest(path.read_bytes())) for i, path in enumerate(migrations, 1)]
     require(len(rows) <= len(expected) and rows == expected[:len(rows)], 'schema_mismatch')
     return expected
 
 
-def schema_check(conn, minimum=1, *, workspace=False, runtime=False, model=False, recovery=False, legacy=False, intents=False):
+def schema_check(conn, minimum=1, *, workspace=False, runtime=False, model=False, recovery=False, legacy=False, intents=False, interfaces=False):
     row = conn.execute("SELECT to_regclass('canca.schema_migrations')").fetchone()
     require(row and row[0] is not None, 'schema_required')
     rows = conn.execute('SELECT version, sha256 FROM canca.schema_migrations ORDER BY version').fetchall()
-    migration_prefix(rows, workspace=workspace, runtime=runtime, model=model, recovery=recovery, legacy=legacy, intents=intents)
+    migration_prefix(rows, workspace=workspace, runtime=runtime, model=model, recovery=recovery, legacy=legacy, intents=intents, interfaces=interfaces)
     require(len(rows) >= minimum, 'schema_required')
 
 
-def migrate(conn, *, workspace=False, runtime=False, model=False, recovery=False, legacy=False, intents=False):
+def migrate(conn, *, workspace=False, runtime=False, model=False, recovery=False, legacy=False, intents=False, interfaces=False):
     guard_connection(conn)
-    migrations = INTENT_MIGRATIONS if intents else LEGACY_MIGRATIONS if legacy else RECOVERY_MIGRATIONS if recovery else MODEL_MIGRATIONS if model else RUNTIME_MIGRATIONS if runtime else WORKSPACE_MIGRATIONS if workspace else MIGRATIONS
+    migrations = INTERFACE_MIGRATIONS if interfaces else INTENT_MIGRATIONS if intents else LEGACY_MIGRATIONS if legacy else RECOVERY_MIGRATIONS if recovery else MODEL_MIGRATIONS if model else RUNTIME_MIGRATIONS if runtime else WORKSPACE_MIGRATIONS if workspace else MIGRATIONS
     with conn.transaction():
         conn.execute('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
         timeout(conn)
@@ -225,7 +226,7 @@ def migrate(conn, *, workspace=False, runtime=False, model=False, recovery=False
         conn.execute('CREATE SCHEMA IF NOT EXISTS canca')
         conn.execute('CREATE TABLE IF NOT EXISTS canca.schema_migrations (version integer PRIMARY KEY, sha256 text NOT NULL)')
         rows = conn.execute('SELECT version, sha256 FROM canca.schema_migrations ORDER BY version').fetchall()
-        expected = migration_prefix(rows, workspace=workspace, runtime=runtime, model=model, recovery=recovery, legacy=legacy, intents=intents)
+        expected = migration_prefix(rows, workspace=workspace, runtime=runtime, model=model, recovery=recovery, legacy=legacy, intents=intents, interfaces=interfaces)
         for version, sha in expected[len(rows):]:
             conn.execute(migrations[version - 1].read_text())
             conn.execute('INSERT INTO canca.schema_migrations VALUES (%s, %s)', (version, sha))
