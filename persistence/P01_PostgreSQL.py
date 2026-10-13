@@ -204,7 +204,8 @@ def timeout(conn):
 def migration_prefix(rows, *, workspace=False, runtime=False, model=False, recovery=False, legacy=False, intents=False, interfaces=False):
     migrations = INTERFACE_MIGRATIONS if interfaces else INTENT_MIGRATIONS if intents else LEGACY_MIGRATIONS if legacy else RECOVERY_MIGRATIONS if recovery else MODEL_MIGRATIONS if model else RUNTIME_MIGRATIONS if runtime else WORKSPACE_MIGRATIONS if workspace else MIGRATIONS
     expected = [(i, digest(path.read_bytes())) for i, path in enumerate(migrations, 1)]
-    require(len(rows) <= len(expected) and rows == expected[:len(rows)], 'schema_mismatch')
+    known = [(i, digest(path.read_bytes())) for i, path in enumerate(INTERFACE_MIGRATIONS, 1)]
+    require(len(rows) <= len(known) and rows == known[:len(rows)], 'schema_mismatch')
     return expected
 
 
@@ -230,7 +231,7 @@ def migrate(conn, *, workspace=False, runtime=False, model=False, recovery=False
         for version, sha in expected[len(rows):]:
             conn.execute(migrations[version - 1].read_text())
             conn.execute('INSERT INTO canca.schema_migrations VALUES (%s, %s)', (version, sha))
-    return {'status': 'already_migrated' if len(rows) == len(expected) else 'migrated',
+    return {'status': 'already_migrated' if len(rows) >= len(expected) else 'migrated',
             'schema_version': '0.6', 'migration': len(expected)}
 
 
