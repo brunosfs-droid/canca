@@ -19,6 +19,30 @@ class InterfaceWriterSQLTests(unittest.TestCase):
         self.conn.execute("INSERT INTO canca.workspaces(workspace_id,name,organization) "
                           "VALUES ('A','Lab A',''),('B','Lab B','')")
 
+    def test_actual_writer_inserts_and_replays_on_postgres(self):
+        # Real SQL inserts and replay, with scope mocked only to avoid
+        # requiring a separately provisioned workspace coordinator lease.
+        from contextlib import nullcontext
+        item=dict(interface_ordinal=0,interface_alias='eth0',address='192.0.2.10',
+                  prefix_length=24,source_path='ssh.json',source_sha256='a'*64)
+        projection={'observations':[{
+            'source_asset_id':'asset-a',
+            'source_refs':[dict(role='credentialed_evidence',
+                                path='ssh.json',sha256='a'*64)]}]}
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.model,'scope',return_value=nullcontext()),patch.object(
+                writer.inventory,'inventory',return_value={'interfaces':[item]}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=projection):
+            first=writer.persist_verified_interfaces(self.conn,'A',Mock(),Path('.'),
+                                                      Path('.'),'batch-1')
+            replay=writer.persist_verified_interfaces(self.conn,'A',Mock(),Path('.'),
+                                                       Path('.'),'batch-1')
+        self.assertEqual(first['inserted_count'],1)
+        self.assertEqual(replay['inserted_count'],0)
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM canca.workspace_interface_observations "
+            "WHERE workspace_id='A' AND collection_id='batch-1'").fetchone()[0],1)
+
     def test_failed_batch_rolls_back_every_record(self):
         rows=[("A","batch-1","ifobs-"+"a"*32,"asset-a","ssh.json","a"*64,0,
                "eth0","192.0.2.10",24),
