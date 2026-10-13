@@ -13,10 +13,7 @@ CREATE TABLE IF NOT EXISTS canca.workspace_interface_observations (
   ipv4_address inet NOT NULL CHECK (family(ipv4_address) = 4),
   prefix_length smallint NOT NULL CHECK (prefix_length BETWEEN 0 AND 32),
   observed_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
-  PRIMARY KEY (workspace_id, collection_id, observation_id),
-  FOREIGN KEY (workspace_id, collection_id)
-    REFERENCES canca.workspace_collections(workspace_id, collection_id)
-    ON DELETE RESTRICT
+  PRIMARY KEY (workspace_id, collection_id, observation_id)
 );
 CREATE INDEX IF NOT EXISTS workspace_interface_observations_asset_idx
   ON canca.workspace_interface_observations(workspace_id, source_asset_id, collection_id);
