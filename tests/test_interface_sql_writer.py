@@ -37,5 +37,24 @@ class WriterTests(unittest.TestCase):
                 writer.persist_verified_interfaces(conn,'A',token,Path('.'),Path('.'),'batch-1')
             conn.execute.assert_not_called()
 
+    def test_replay_accepts_matching_row_without_new_insert(self):
+        token=Mock()
+        entry=dict(interface_ordinal=0,interface_alias='eth0',address='192.0.2.10',
+                   prefix_length=24,source_path='ssh.json',source_sha256='a'*64)
+        projection={'observations':[{
+            'source_asset_id':'asset-1',
+            'source_refs':[dict(role='credentialed_evidence',path='ssh.json',sha256='a'*64)]
+        }]}
+        conn=Mock()
+        prior=('asset-1','ssh.json','a'*64,0,'eth0','192.0.2.10',24)
+        conn.execute.return_value.fetchone.side_effect=[None,prior]
+        with patch.object(writer.model,'token_args'),patch.object(writer.inventory,'inventory',
+              return_value={'interfaces':[entry]}),patch.object(writer.inventory.registry,
+              'prepare_assets',return_value=projection),patch.object(writer.model,'scope'),patch.object(
+              writer.pg,'schema_check'):
+            result=writer.persist_verified_interfaces(conn,'A',token,Path('.'),Path('.'),'batch-1')
+        self.assertEqual(result['inserted_count'],0)
+        self.assertEqual(conn.execute.call_count,2)
+
 if __name__=='__main__':
     unittest.main()
