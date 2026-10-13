@@ -3,7 +3,6 @@
 Requires a live workspace-scoped write lease and caller-provided trusted root.
 No physical interface identity or topology links are inferred.
 """
-from pathlib import Path
 import P01_PostgreSQL as pg
 import P01_Workspace_Model as model
 import P01_Verified_Interface_Inventory as inventory
@@ -20,18 +19,21 @@ def persist_verified_interfaces(conn, workspace_id, token, store, import_dir, co
     rows=[]
     for sha,items in sorted(grouped.items()):
         rows.extend(identity.observation_keys(workspace_id,collection_id,sha,items))
-    # All evidence bytes and identity checks precede the first SQL write.
+    projection=inventory.registry.prepare_assets(store,import_dir)
+    owners={}
+    for obs in projection["observations"]:
+        for ref in obs["source_refs"]:
+            if ref["role"]=="credentialed_evidence":
+                owners.setdefault((ref["path"],ref["sha256"]),set()).add(obs["source_asset_id"])
+    pending=[]
+    for item in rows:
+        matching=owners.get((item["source_path"],item["source_sha256"]),set())
+        pg.require(len(matching)==1,"model_import_conflict")
+        pending.append((item,next(iter(matching))))
+    # All evidence bytes, source ownership and identity checks precede SQL writes.
     with model.scope(conn,workspace_id,token,writing=True):
         pg.schema_check(conn,minimum=11,interfaces=True)
-        for item in rows:
-            source_refs=inventory.registry.prepare_assets(store,import_dir)["observations"]
-            owning={obs["source_asset_id"] for obs in source_refs
-                    if any(ref["role"]=="credentialed_evidence"
-                           and ref["path"]==item["source_path"]
-                           and ref["sha256"]==item["source_sha256"]
-                           for ref in obs["source_refs"])}
-            pg.require(len(owning)==1,"model_import_conflict")
-            source_asset_id=owning.pop()
+        for item,source_asset_id in pending:
             conn.execute(
                 "INSERT INTO canca.workspace_interface_observations "
                 "(workspace_id,collection_id,observation_id,source_asset_id,"
