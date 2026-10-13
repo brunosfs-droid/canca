@@ -6,7 +6,7 @@ import P01_Interface_Observation_Identity as ids
 
 class IdentityTests(unittest.TestCase):
     def test_repeatable_and_workspace_collection_isolated(self):
-        item=dict(interface_ordinal=0,source_sha256="a"*64,interface_alias="eth0",address="192.0.2.10")
+        item=dict(interface_ordinal=0,source_sha256="a"*64,interface_alias="eth0",address="192.0.2.10",prefix_length=24)
         one=ids.observation_keys("A","collection-1","a"*64,[item])[0]
         repeat=ids.observation_keys("A","collection-1","a"*64,[item])[0]
         other=ids.observation_keys("B","collection-1","a"*64,[item])[0]
