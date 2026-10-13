@@ -32,6 +32,17 @@ class ModelInputTests(unittest.TestCase):
         self.assertEqual(before,{str(p):pg.digest(p.read_bytes()) for p in self.store.rglob('*') if p.is_file()})
         self.assertTrue(any(s['qualified'] for s in self.p['observations'][0]['signals']))
 
+    def test_credentialed_interface_address_keeps_source_evidence(self):
+        observations=self.p['observations']
+        credentialed={ref['path'] for obs in observations for ref in obs['source_refs']
+                      if ref['role']=='credentialed_evidence'}
+        self.assertTrue(credentialed)
+        self.assertTrue(any(
+            signal['kind']=='ip' and signal['value']=='192.0.2.10'
+            and credentialed.intersection(signal['sources'])
+            and signal['qualified'] is False
+            for obs in observations for signal in obs['signals']))
+
     def test_embedded_forged_identity_is_ignored(self):
         store,directory=assets.fixture(self.base/'forged',forged=True)
         values=[s['value'] for s in model.prepare_source(store,directory)['observations'][0]['signals']]

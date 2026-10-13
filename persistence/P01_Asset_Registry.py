@@ -106,6 +106,17 @@ def observation(asset, ordinal, artifacts, docs, duplicate_ids, ambiguous_ids):
                 add('fqdn', identity.get('fqdn'), True, ref['path'])
                 # A Linux hostname may carry the actual collected FQDN.
                 add('fqdn', identity.get('hostname'), True, ref['path'])
+                # Preserve credentialed interface addresses as unqualified
+                # observed IP signals. They are historical evidence, not
+                # identity/port ownership or inferred topology relations.
+                network = enrichment.get('network', {})
+                if isinstance(network, dict):
+                    for interface in network.get('interfaces', [])[:256]:
+                        if not isinstance(interface, dict):
+                            continue
+                        for address in interface.get('ipv4', [])[:64]:
+                            if isinstance(address, dict):
+                                add('ip', address.get('address'), False, ref['path'])
         elif ref['role'] == 'network_discovery':
             for row in doc.get('assets', []):
                 if row.get('ip') in asset['addresses']:
