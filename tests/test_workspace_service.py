@@ -224,6 +224,26 @@ class RegisteredOperationTests(unittest.TestCase):
                 persist.assert_called_once()
                 self.assertFalse(self.c._jobs)
 
+    def test_interface_writer_commit_callback_uses_real_coordinator_authorization(self):
+        token=self.opened()
+        adapter=self.adapter()
+        with tempfile.TemporaryDirectory() as root:
+            def invoke_commit_fence(*args,**kwargs):
+                fence=kwargs['before_commit']
+                fence()
+                self.grants['writer'].discard(('A','workspace:write'))
+                fence()
+                return {'status':'persisted'}
+            with patch.dict(adapter.sources._roots,{'A':Path(root)}),patch.object(
+                    adapter.sources,'prepare',return_value={}),patch(
+                    'P01_Interface_SQL_Writer.persist_verified_interfaces',
+                    side_effect=invoke_commit_fence) as persist:
+                with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
+                    adapter.persist_verified_interface_inventory(
+                        'writer',token,'LAB-001','bnd-'+'a'*20,'bnd-'+'a'*20)
+                persist.assert_called_once()
+                self.assertFalse(self.c._jobs)
+
     def test_interface_sql_writer_denies_stale_lease_before_source_access(self):
         token=self.opened()
         adapter=self.adapter()
