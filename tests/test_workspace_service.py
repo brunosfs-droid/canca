@@ -177,6 +177,19 @@ class RegisteredOperationTests(unittest.TestCase):
                 adapter.persisted_interface_ip_history('reader',token,limit=10)
             read.assert_not_called()
 
+    def test_interface_sql_writer_denies_stale_lease_before_source_access(self):
+        token=self.opened()
+        adapter=self.adapter()
+        self.c.close('writer','A',token.generation,timeout=0)
+        self.opened('B')
+        with patch.object(adapter.sources,'prepare') as source,patch(
+                'P01_Interface_SQL_Writer.persist_verified_interfaces') as writer:
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_generation_stale'):
+                adapter.persist_verified_interface_inventory(
+                    'reader',token,'LAB-001','bnd-'+'a'*20,'batch-1')
+            source.assert_not_called()
+            writer.assert_not_called()
+
     def test_verified_interface_inventory_denies_stale_generation_before_read(self):
         token=self.opened()
         adapter=self.adapter()
