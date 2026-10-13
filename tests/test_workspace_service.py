@@ -177,6 +177,17 @@ class RegisteredOperationTests(unittest.TestCase):
                 adapter.persisted_interface_ip_history('reader',token,limit=10)
             read.assert_not_called()
 
+    def test_interface_sql_writer_rejects_collection_not_matching_bundle(self):
+        token=self.opened()
+        adapter=self.adapter()
+        with patch.object(adapter.sources,'prepare') as prepare,patch(
+                'P01_Interface_SQL_Writer.persist_verified_interfaces') as writer:
+            with self.assertRaisesRegex(pg.PersistenceError,'model_import_conflict'):
+                adapter.persist_verified_interface_inventory(
+                    'writer',token,'LAB-001','bnd-'+'a'*20,'other-collection')
+            prepare.assert_not_called()
+            writer.assert_not_called()
+
     def test_interface_sql_writer_requires_write_and_releases_coordinator_job(self):
         token=self.opened()
         adapter=self.adapter()
@@ -187,10 +198,10 @@ class RegisteredOperationTests(unittest.TestCase):
                     return_value={'status':'persisted','observation_count':1}) as persist:
                 with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
                     adapter.persist_verified_interface_inventory(
-                        'reader',token,'LAB-001','bnd-'+'a'*20,'batch-1')
+                        'reader',token,'LAB-001','bnd-'+'a'*20,'bnd-'+'a'*20)
                 persist.assert_not_called()
                 result=adapter.persist_verified_interface_inventory(
-                    'writer',token,'LAB-001','bnd-'+'a'*20,'batch-1')
+                    'writer',token,'LAB-001','bnd-'+'a'*20,'bnd-'+'a'*20)
                 self.assertEqual(result['status'],'persisted')
                 persist.assert_called_once()
                 self.assertEqual(persist.call_args.args[1:3],('A',token))
@@ -209,7 +220,7 @@ class RegisteredOperationTests(unittest.TestCase):
                     side_effect=revoke_after_write) as persist:
                 with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
                     adapter.persist_verified_interface_inventory(
-                        'writer',token,'LAB-001','bnd-'+'a'*20,'batch-1')
+                        'writer',token,'LAB-001','bnd-'+'a'*20,'bnd-'+'a'*20)
                 persist.assert_called_once()
                 self.assertFalse(self.c._jobs)
 
@@ -222,7 +233,7 @@ class RegisteredOperationTests(unittest.TestCase):
                 'P01_Interface_SQL_Writer.persist_verified_interfaces') as writer:
             with self.assertRaisesRegex(pg.PersistenceError,'workspace_generation_stale'):
                 adapter.persist_verified_interface_inventory(
-                    'writer',token,'LAB-001','bnd-'+'a'*20,'batch-1')
+                    'writer',token,'LAB-001','bnd-'+'a'*20,'bnd-'+'a'*20)
             source.assert_not_called()
             writer.assert_not_called()
 
