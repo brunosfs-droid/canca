@@ -120,6 +120,11 @@ class WorkspaceService:
         return self._call(actor,token,'workspace:write',model.relationship,*args,**fields)
     def apply_import(self,actor,token,plan_id,request_id):
         return self._call(actor,token,'workspace:write',model.apply_import,plan_id,request_id)
+    def persisted_interface_ip_history(self,actor,token,*,limit=100):
+        """Read committed credentialed interface IP history under workspace lease."""
+        return self._call(actor,token,'workspace:read',
+                          model.persisted_interface_ip_history,limit=limit)
+
     def persisted_network_observations(self,actor,token,*,limit=100,source_asset_id=None):
         """Read committed network evidence only, fenced by a live workspace."""
         return self._call(actor,token,'workspace:read',
