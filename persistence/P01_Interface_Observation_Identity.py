@@ -18,7 +18,14 @@ def observation_keys(workspace_id, collection_id, source_sha256, interfaces):
     for item in interfaces:
         if type(item) is not dict or type(item.get("interface_ordinal")) is not int or item["interface_ordinal"]<0 or item.get("source_sha256")!=source_sha256:
             raise ValueError("interface_identity_invalid")
-        key=[workspace_id,collection_id,source_sha256,item["interface_ordinal"],item.get("address"),item.get("prefix_length")]
+        if type(item.get("address")) is not str or type(item.get("prefix_length")) is not int or not 0<=item["prefix_length"]<=32:
+            raise ValueError("interface_identity_invalid")
+        import ipaddress
+        try:
+            address=str(ipaddress.IPv4Address(item["address"]))
+        except ipaddress.AddressValueError:
+            raise ValueError("interface_identity_invalid") from None
+        key=[workspace_id,collection_id,source_sha256,item["interface_ordinal"],address,item["prefix_length"]]
         digest=hashlib.sha256(json.dumps(key,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
         rows.append(dict(item,observation_id="ifobs-"+digest[:32],workspace_id=workspace_id,
                          collection_id=collection_id,identity_scope="observation_only"))
