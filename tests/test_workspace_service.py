@@ -167,6 +167,16 @@ class RegisteredOperationTests(unittest.TestCase):
             self.assertEqual(result['interfaces'][0]['identity_scope'],'observation_only')
             self.assertEqual(result['topology_edges_created'],0)
 
+    def test_persisted_interface_history_rejects_stale_workspace_before_sql(self):
+        token=self.opened()
+        adapter=self.adapter()
+        self.c.close('writer','A',token.generation,timeout=0)
+        self.opened('B')
+        with patch.object(model,'persisted_interface_ip_history') as read:
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_generation_stale'):
+                adapter.persisted_interface_ip_history('reader',token,limit=10)
+            read.assert_not_called()
+
     def test_verified_interface_inventory_denies_stale_generation_before_read(self):
         token=self.opened()
         adapter=self.adapter()
