@@ -196,6 +196,23 @@ class RegisteredOperationTests(unittest.TestCase):
                 self.assertEqual(persist.call_args.args[1:3],('A',token))
                 self.assertFalse(self.c._jobs)
 
+    def test_interface_sql_writer_detects_revocation_before_response(self):
+        token=self.opened()
+        adapter=self.adapter()
+        with tempfile.TemporaryDirectory() as root:
+            def revoke_after_write(*args,**kwargs):
+                self.grants['writer'].discard(('A','workspace:write'))
+                return {'status':'persisted','observation_count':1}
+            with patch.dict(adapter.sources._roots,{'A':Path(root)}),patch.object(
+                    adapter.sources,'prepare',return_value={}),patch(
+                    'P01_Interface_SQL_Writer.persist_verified_interfaces',
+                    side_effect=revoke_after_write) as persist:
+                with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
+                    adapter.persist_verified_interface_inventory(
+                        'writer',token,'LAB-001','bnd-'+'a'*20,'batch-1')
+                persist.assert_called_once()
+                self.assertFalse(self.c._jobs)
+
     def test_interface_sql_writer_denies_stale_lease_before_source_access(self):
         token=self.opened()
         adapter=self.adapter()
