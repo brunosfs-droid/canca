@@ -154,6 +154,7 @@ class WorkspaceService:
                                              collection_id,*,limit=100):
         """Persist verified imported interface evidence with a live write lease."""
         import P01_Interface_SQL_Writer as writer
+        pg.require(collection_id==bundle_id,'model_import_conflict')
         with self.coordinator.borrow(actor,token,'workspace:write') as operation:
             operation.check()
             self.sources.prepare(token.workspace_id,assessment_id,bundle_id)
