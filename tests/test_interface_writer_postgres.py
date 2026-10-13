@@ -44,17 +44,25 @@ class InterfaceWriterSQLTests(unittest.TestCase):
         self.conn.execute(sql.SQL("GRANT USAGE ON SCHEMA canca TO {}").format(sql.Identifier(role)))
         self.conn.execute(sql.SQL("GRANT SELECT,INSERT ON canca.workspace_interface_observations TO {}").format(
             sql.Identifier(role)))
-        with self.conn.transaction():
-            self.conn.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(role)))
-            self.conn.execute("SELECT set_config('canca.workspace_id','B',true)")
-            rows=self.conn.execute("SELECT * FROM canca.workspace_interface_observations").fetchall()
-            self.assertEqual(rows,[])
-            from psycopg.errors import InsufficientPrivilege
+        from psycopg.errors import InsufficientPrivilege
+        # The unprivileged probe has no EXECUTE right on the guarded
+        # authorization function. Explicit denial is the safe contract.
+        with self.assertRaises(InsufficientPrivilege):
             with self.conn.transaction():
-                with self.assertRaises(InsufficientPrivilege):
-                    self.conn.execute(
-                        "INSERT INTO canca.workspace_interface_observations "
-                        "(workspace_id,collection_id,observation_id,source_asset_id,"
-                        "source_path,source_sha256,interface_ordinal,interface_alias,"
-                        "ipv4_address,prefix_length) VALUES "
-                        "('A','batch','ifobs-"+"a"*32+"','asset','ssh.json','"+"a"*64+"',0,'eth0','192.0.2.10',24)")
+                self.conn.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(role)))
+                self.conn.execute("SELECT set_config('canca.workspace_id','B',true)")
+                self.conn.execute("SELECT * FROM canca.workspace_interface_observations").fetchall()
+        # A failed PostgreSQL statement aborts its transaction. Verify
+        # the write denial in a fresh transaction, not the aborted one.
+        values=('A','batch','ifobs-'+'a'*32,'asset','ssh.json','a'*64,
+                0,'eth0','192.0.2.10',24)
+        with self.assertRaises(InsufficientPrivilege):
+            with self.conn.transaction():
+                self.conn.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(role)))
+                self.conn.execute("SELECT set_config('canca.workspace_id','B',true)")
+                self.conn.execute(
+                    "INSERT INTO canca.workspace_interface_observations "
+                    "(workspace_id,collection_id,observation_id,source_asset_id,"
+                    "source_path,source_sha256,interface_ordinal,interface_alias,"
+                    "ipv4_address,prefix_length) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",values)
