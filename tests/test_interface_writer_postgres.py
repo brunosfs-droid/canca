@@ -256,6 +256,39 @@ class InterfaceWriterSQLTests(unittest.TestCase):
         self.assertEqual([row[0] for row in rows],['batch-1','batch-2'])
         self.assertNotEqual(rows[0][1],rows[1][1])
 
+    def test_mixed_new_and_conflicting_replay_rolls_back_new_row(self):
+        # A collision later in a batch must not leave earlier new rows committed.
+        existing=dict(interface_ordinal=1,interface_alias='eth1',
+                      address='192.0.2.11',prefix_length=24,
+                      source_path='ssh.json',source_sha256='a'*64)
+        new=dict(interface_ordinal=0,interface_alias='eth0',
+                 address='192.0.2.10',prefix_length=24,
+                 source_path='ssh.json',source_sha256='a'*64)
+        original={'observations':[{'source_asset_id':'asset-original',
+            'source_refs':[dict(role='credentialed_evidence',
+                                path='ssh.json',sha256='a'*64)]}]}
+        changed={'observations':[{'source_asset_id':'asset-conflicting',
+            'source_refs':[dict(role='credentialed_evidence',
+                                path='ssh.json',sha256='a'*64)]}]}
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.model,'scope',side_effect=lambda *args,**kwargs: self.conn.transaction()),patch.object(
+                writer.inventory,'inventory',return_value={'interfaces':[existing]}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=original):
+            writer.persist_verified_interfaces(self.conn,'A',Mock(),Path('.'),
+                                               Path('.'),'batch-mixed')
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.model,'scope',side_effect=lambda *args,**kwargs: self.conn.transaction()),patch.object(
+                writer.inventory,'inventory',return_value={'interfaces':[new,existing]}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=changed):
+            with self.assertRaisesRegex(pg.PersistenceError,'model_import_conflict'):
+                writer.persist_verified_interfaces(self.conn,'A',Mock(),Path('.'),
+                                                   Path('.'),'batch-mixed')
+        rows=self.conn.execute(
+            "SELECT source_asset_id,interface_ordinal FROM "
+            "canca.workspace_interface_observations WHERE workspace_id='A' "
+            "AND collection_id='batch-mixed' ORDER BY interface_ordinal").fetchall()
+        self.assertEqual(rows,[('asset-original',1)])
+
     def test_failed_batch_rolls_back_every_record(self):
         rows=[("A","batch-1","ifobs-"+"a"*32,"asset-a","ssh.json","a"*64,0,
                "eth0","192.0.2.10",24),
