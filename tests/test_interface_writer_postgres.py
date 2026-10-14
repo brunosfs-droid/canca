@@ -104,6 +104,43 @@ class InterfaceWriterSQLTests(unittest.TestCase):
             "SELECT count(*) FROM canca.workspace_interface_observations "
             "WHERE collection_id='batch-readonly'").fetchone()[0],0)
 
+    def test_writer_grant_in_other_workspace_cannot_write_target(self):
+        # A genuine write grant on B must not authorize a write on A.
+        from psycopg import sql
+        import P01_Workspace as ws
+        import P01_Workspace_Coordinator as runtime
+        role='canca_interface_other_ws_ci'
+        if not self.conn.execute(
+                'SELECT 1 FROM pg_roles WHERE rolname=%s',(role,)).fetchone():
+            self.conn.execute(sql.SQL(
+                'CREATE ROLE {} NOLOGIN NOSUPERUSER NOBYPASSRLS').format(
+                sql.Identifier(role)))
+        for statement in (
+                'GRANT USAGE ON SCHEMA canca TO {}',
+                'GRANT SELECT ON canca.schema_migrations TO {}',
+                'GRANT SELECT ON canca.workspace_grants TO {}'):
+            self.conn.execute(sql.SQL(statement).format(sql.Identifier(role)))
+        ws.grant_workspace(self.conn,'B',role,'workspace:write')
+        actor=pg.open_connection()
+        self.addCleanup(actor.close)
+        actor.execute(sql.SQL('SET ROLE {}').format(sql.Identifier(role)))
+        item=dict(interface_ordinal=0,interface_alias='eth0',
+                  address='192.0.2.10',prefix_length=24,
+                  source_path='ssh.json',source_sha256='a'*64)
+        projection={'observations':[{'source_asset_id':'asset-a',
+            'source_refs':[dict(role='credentialed_evidence',
+                                path='ssh.json',sha256='a'*64)]}]}
+        token=runtime.Token('A',1,'a'*32)
+        with patch.object(writer.inventory,'inventory',
+                return_value={'interfaces':[item]}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=projection):
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
+                writer.persist_verified_interfaces(
+                    actor,'A',token,Path('.'),Path('.'),'batch-cross-workspace')
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM canca.workspace_interface_observations "
+            "WHERE collection_id='batch-cross-workspace'").fetchone()[0],0)
+
     def test_actual_writer_inserts_and_replays_on_postgres(self):
         # Real SQL inserts and replay, with scope mocked only to avoid
         # requiring a separately provisioned workspace coordinator lease.
