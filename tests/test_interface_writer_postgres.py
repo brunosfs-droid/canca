@@ -77,7 +77,7 @@ class InterfaceWriterSQLTests(unittest.TestCase):
             'source_refs':[dict(role='credentialed_evidence',
                                 path='ssh.json',sha256='a'*64)]}]}
         with patch.object(writer.model,'token_args'),patch.object(
-                writer.model,'scope',return_value=nullcontext()),patch.object(
+                writer.model,'scope',side_effect=lambda *args,**kwargs: self.conn.transaction()),patch.object(
                 writer.inventory,'inventory',return_value={'interfaces':[item]}),patch.object(
                 writer.inventory.registry,'prepare_assets',return_value=projection):
             first=writer.persist_verified_interfaces(self.conn,'A',Mock(),Path('.'),
@@ -100,7 +100,7 @@ class InterfaceWriterSQLTests(unittest.TestCase):
         def revoked():
             raise pg.PersistenceError('workspace_access_denied')
         with patch.object(writer.model,'token_args'),patch.object(
-                writer.model,'scope',return_value=nullcontext()),patch.object(
+                writer.model,'scope',side_effect=lambda *args,**kwargs: self.conn.transaction()),patch.object(
                 writer.inventory,'inventory',return_value={'interfaces':[item]}),patch.object(
                 writer.inventory.registry,'prepare_assets',return_value=projection):
             with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
@@ -120,7 +120,7 @@ class InterfaceWriterSQLTests(unittest.TestCase):
             'source_refs':[dict(role='credentialed_evidence',path='ssh.json',
                                 sha256='a'*64)]}]}
         with patch.object(writer.model,'token_args'),patch.object(
-                writer.model,'scope',return_value=nullcontext()),patch.object(
+                writer.model,'scope',side_effect=lambda *args,**kwargs: self.conn.transaction()),patch.object(
                 writer.inventory,'inventory',return_value={'interfaces':[item]}),patch.object(
                 writer.inventory.registry,'prepare_assets',return_value=projection):
             first=writer.persist_verified_interfaces(
@@ -158,7 +158,7 @@ class InterfaceWriterSQLTests(unittest.TestCase):
             "ON canca.workspace_interface_observations FOR EACH ROW "
             "EXECUTE FUNCTION canca.reject_second_interface()")
         with patch.object(writer.model,'token_args'),patch.object(
-                writer.model,'scope',return_value=nullcontext()),patch.object(
+                writer.model,'scope',side_effect=lambda *args,**kwargs: self.conn.transaction()),patch.object(
                 writer.inventory,'inventory',return_value={'interfaces':items}),patch.object(
                 writer.inventory.registry,'prepare_assets',return_value=projection):
             with self.assertRaisesRegex(Exception,'synthetic second row failure'):
@@ -182,7 +182,7 @@ class InterfaceWriterSQLTests(unittest.TestCase):
             if calls[0]==1:
                 raise pg.PersistenceError('workspace_lease_lost')
         with patch.object(writer.model,'token_args'),patch.object(
-                writer.model,'scope',return_value=nullcontext()),patch.object(
+                writer.model,'scope',side_effect=lambda *args,**kwargs: self.conn.transaction()),patch.object(
                 writer.inventory,'inventory',return_value={'interfaces':items}),patch.object(
                 writer.inventory.registry,'prepare_assets',return_value=projection):
             with self.assertRaisesRegex(pg.PersistenceError,'workspace_lease_lost'):
