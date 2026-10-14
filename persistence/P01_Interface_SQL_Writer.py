@@ -12,6 +12,7 @@ def persist_verified_interfaces(conn, workspace_id, token, store, import_dir, co
     model.token_args(workspace_id,token)
     model.require(type(collection_id) is str and 1<=len(collection_id)<=256)
     model.require(type(limit) is int and 1<=limit<=100)
+    pg.require(before_commit is None or callable(before_commit),'model_input_invalid')
     data=inventory.inventory(store,import_dir,limit=limit)
     grouped={}
     for item in data["interfaces"]:
@@ -35,7 +36,6 @@ def persist_verified_interfaces(conn, workspace_id, token, store, import_dir, co
         matching=owners.get((item["source_path"],item["source_sha256"]),set())
         pg.require(len(matching)==1,"model_import_conflict")
         pending.append((item,next(iter(matching))))
-    pg.require(before_commit is None or callable(before_commit),'model_input_invalid')
     # All verified evidence is validated before the first database write.
     # The transaction rolls back the entire collection on any failure.
     inserted=0
