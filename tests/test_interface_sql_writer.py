@@ -215,5 +215,30 @@ class WriterTests(unittest.TestCase):
         owners={call.args[1][5]:call.args[1][3] for call in conn.execute.call_args_list}
         self.assertEqual(owners,{'a'*64:'asset-A','b'*64:'asset-B'})
 
+    def test_equal_digests_with_distinct_paths_preserve_source_ownership(self):
+        entries=[
+            dict(interface_ordinal=0,interface_alias='eth0',
+                 address='192.0.2.'+str(20+i),prefix_length=24,
+                 source_path=path,source_sha256='a'*64)
+            for i,path in enumerate(('host-a/ssh.json','host-b/ssh.json'))]
+        projection={'observations':[
+            {'source_asset_id':asset,
+             'source_refs':[dict(role='credentialed_evidence',
+                                 path=path,sha256='a'*64)]}
+            for asset,path in (('asset-A','host-a/ssh.json'),
+                               ('asset-B','host-b/ssh.json'))]}
+        conn=MagicMock()
+        conn.execute.return_value.fetchone.return_value=('inserted',)
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.inventory,'inventory',return_value={'interfaces':entries}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=projection),patch.object(
+                writer.model,'scope'),patch.object(writer.pg,'schema_check'):
+            result=writer.persist_verified_interfaces(conn,'A',Mock(),Path('.'),
+                                                     Path('.'),'batch-equal-digests')
+        self.assertEqual(result['inserted_count'],2)
+        owners={call.args[1][4]:call.args[1][3] for call in conn.execute.call_args_list}
+        self.assertEqual(owners,{'host-a/ssh.json':'asset-A',
+                                 'host-b/ssh.json':'asset-B'})
+
 if __name__=='__main__':
     unittest.main()
