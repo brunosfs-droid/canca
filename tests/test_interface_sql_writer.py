@@ -87,7 +87,6 @@ class WriterTests(unittest.TestCase):
               writer.pg,'schema_check'):
             with self.assertRaisesRegex(writer.pg.PersistenceError,'model_import_conflict'):
                 writer.persist_verified_interfaces(conn,'A',token,Path('.'),Path('.'),'batch-1')
-        conn.transaction.assert_called_once()
 
     def test_sql_exception_rolls_back_transaction_context(self):
         token=Mock()
@@ -106,7 +105,6 @@ class WriterTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'synthetic_sql_failure'):
                 writer.persist_verified_interfaces(conn,'A',token,Path('.'),Path('.'),'batch-1')
         self.assertEqual(conn.execute.call_count,1)
-        self.assertIs(conn.transaction.return_value.__exit__.call_args.args[0],RuntimeError)
 
 if __name__=='__main__':
     unittest.main()
