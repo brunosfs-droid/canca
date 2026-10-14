@@ -172,5 +172,24 @@ class WriterTests(unittest.TestCase):
         conn.execute.assert_not_called()
         conn.transaction.assert_not_called()
 
+    def test_same_path_different_evidence_hash_cannot_claim_asset(self):
+        entry=dict(interface_ordinal=0,interface_alias='eth0',
+                   address='192.0.2.10',prefix_length=24,
+                   source_path='ssh.json',source_sha256='a'*64)
+        # A matching filename is insufficient: provenance must match hash too.
+        projection={'observations':[{
+            'source_asset_id':'asset-1',
+            'source_refs':[dict(role='credentialed_evidence',
+                                path='ssh.json',sha256='b'*64)]}]}
+        conn=MagicMock()
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.inventory,'inventory',return_value={'interfaces':[entry]}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=projection):
+            with self.assertRaisesRegex(writer.pg.PersistenceError,'model_import_conflict'):
+                writer.persist_verified_interfaces(conn,'A',Mock(),Path('.'),
+                                                   Path('.'),'batch-sha-mismatch')
+        conn.execute.assert_not_called()
+        conn.transaction.assert_not_called()
+
 if __name__=='__main__':
     unittest.main()
