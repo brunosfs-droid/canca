@@ -106,5 +106,40 @@ class WriterTests(unittest.TestCase):
                 writer.persist_verified_interfaces(conn,'A',token,Path('.'),Path('.'),'batch-1')
         self.assertEqual(conn.execute.call_count,1)
 
+    def test_ambiguous_credentialed_owners_fail_before_sql(self):
+        entry=dict(interface_ordinal=0,interface_alias='eth0',address='192.0.2.10',
+                   prefix_length=24,source_path='ssh.json',source_sha256='a'*64)
+        projection={'observations':[
+            {'source_asset_id':asset,
+             'source_refs':[dict(role='credentialed_evidence',
+                                 path='ssh.json',sha256='a'*64)]}
+            for asset in ('asset-1','asset-2')]}
+        conn=MagicMock()
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.inventory,'inventory',return_value={'interfaces':[entry]}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=projection):
+            with self.assertRaisesRegex(writer.pg.PersistenceError,'model_import_conflict'):
+                writer.persist_verified_interfaces(conn,'A',Mock(),Path('.'),
+                                                   Path('.'),'batch-ambiguous')
+        conn.execute.assert_not_called()
+        conn.transaction.assert_not_called()
+
+    def test_noncredentialed_owner_is_not_accepted(self):
+        entry=dict(interface_ordinal=0,interface_alias='eth0',address='192.0.2.10',
+                   prefix_length=24,source_path='ssh.json',source_sha256='a'*64)
+        projection={'observations':[{
+            'source_asset_id':'asset-1',
+            'source_refs':[dict(role='network_observation',
+                                path='ssh.json',sha256='a'*64)]}]}
+        conn=MagicMock()
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.inventory,'inventory',return_value={'interfaces':[entry]}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=projection):
+            with self.assertRaisesRegex(writer.pg.PersistenceError,'model_import_conflict'):
+                writer.persist_verified_interfaces(conn,'A',Mock(),Path('.'),
+                                                   Path('.'),'batch-untrusted')
+        conn.execute.assert_not_called()
+        conn.transaction.assert_not_called()
+
 if __name__=='__main__':
     unittest.main()
