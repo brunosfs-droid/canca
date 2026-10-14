@@ -47,6 +47,25 @@ class InterfaceWriterSQLTests(unittest.TestCase):
         finally:
             lease.stop(generation+1)
 
+    def test_actual_writer_denies_missing_workspace_grant_before_insert(self):
+        # Exercise the real workspace scope/RLS contract rather than patching it.
+        import P01_Workspace_Coordinator as runtime
+        item=dict(interface_ordinal=0,interface_alias='eth0',address='192.0.2.10',
+                  prefix_length=24,source_path='ssh.json',source_sha256='a'*64)
+        projection={'observations':[{'source_asset_id':'asset-a',
+            'source_refs':[dict(role='credentialed_evidence',path='ssh.json',
+                                sha256='a'*64)]}]}
+        token=runtime.Token('A',1,'a'*32)
+        with patch.object(writer.inventory,'inventory',
+                return_value={'interfaces':[item]}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=projection):
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
+                writer.persist_verified_interfaces(
+                    self.conn,'A',token,Path('.'),Path('.'),'batch-denied')
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM canca.workspace_interface_observations "
+            "WHERE collection_id='batch-denied'").fetchone()[0],0)
+
     def test_actual_writer_inserts_and_replays_on_postgres(self):
         # Real SQL inserts and replay, with scope mocked only to avoid
         # requiring a separately provisioned workspace coordinator lease.
