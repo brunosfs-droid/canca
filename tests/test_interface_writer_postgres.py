@@ -228,6 +228,34 @@ class InterfaceWriterSQLTests(unittest.TestCase):
             "ORDER BY workspace_id").fetchall()
         self.assertEqual(rows,[('A',1),('B',1)])
 
+    def test_distinct_collections_preserve_append_only_history_in_one_workspace(self):
+        # Re-importing unchanged evidence in a later collection is history,
+        # not a replay of the original collection's observation key.
+        item=dict(interface_ordinal=0,interface_alias='eth0',address='192.0.2.10',
+                  prefix_length=24,source_path='ssh.json',source_sha256='a'*64)
+        projection={'observations':[{'source_asset_id':'asset-a',
+            'source_refs':[dict(role='credentialed_evidence',
+                                path='ssh.json',sha256='a'*64)]}]}
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.model,'scope',side_effect=lambda *args,**kwargs: self.conn.transaction()),patch.object(
+                writer.inventory,'inventory',return_value={'interfaces':[item]}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=projection):
+            first=writer.persist_verified_interfaces(self.conn,'A',Mock(),Path('.'),
+                                                     Path('.'),'batch-1')
+            later=writer.persist_verified_interfaces(self.conn,'A',Mock(),Path('.'),
+                                                     Path('.'),'batch-2')
+            replay=writer.persist_verified_interfaces(self.conn,'A',Mock(),Path('.'),
+                                                      Path('.'),'batch-1')
+        self.assertEqual((first['inserted_count'],later['inserted_count'],
+                          replay['inserted_count']),(1,1,0))
+        rows=self.conn.execute(
+            "SELECT collection_id,observation_id FROM canca.workspace_interface_observations "
+            "WHERE workspace_id='A' AND collection_id IN ('batch-1','batch-2') "
+            "ORDER BY collection_id").fetchall()
+        self.assertEqual(len(rows),2)
+        self.assertEqual([row[0] for row in rows],['batch-1','batch-2'])
+        self.assertNotEqual(rows[0][1],rows[1][1])
+
     def test_failed_batch_rolls_back_every_record(self):
         rows=[("A","batch-1","ifobs-"+"a"*32,"asset-a","ssh.json","a"*64,0,
                "eth0","192.0.2.10",24),
