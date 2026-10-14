@@ -92,6 +92,35 @@ class InterfaceWriterSQLTests(unittest.TestCase):
             "SELECT count(*) FROM canca.workspace_interface_observations "
             "WHERE collection_id='batch-revoked'").fetchone()[0],0)
 
+    def test_conflicting_replay_rejects_existing_sql_row_without_mutation(self):
+        from contextlib import nullcontext
+        item=dict(interface_ordinal=0,interface_alias='eth0',
+                  address='192.0.2.10',prefix_length=24,
+                  source_path='ssh.json',source_sha256='a'*64)
+        projection={'observations':[{'source_asset_id':'asset-a',
+            'source_refs':[dict(role='credentialed_evidence',path='ssh.json',
+                                sha256='a'*64)]}]}
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.model,'scope',return_value=nullcontext()),patch.object(
+                writer.inventory,'inventory',return_value={'interfaces':[item]}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=projection):
+            first=writer.persist_verified_interfaces(
+                self.conn,'A',Mock(),Path('.'),Path('.'),'batch-conflict')
+            self.assertEqual(first['inserted_count'],1)
+            # Simulate a conflicting existing row. Append-only replay must
+            # fail rather than silently treating divergent content as success.
+            self.conn.execute(
+                "UPDATE canca.workspace_interface_observations "
+                "SET source_asset_id='divergent' WHERE workspace_id='A' "
+                "AND collection_id='batch-conflict'")
+            with self.assertRaisesRegex(pg.PersistenceError,'model_import_conflict'):
+                writer.persist_verified_interfaces(
+                    self.conn,'A',Mock(),Path('.'),Path('.'),'batch-conflict')
+        rows=self.conn.execute(
+            "SELECT source_asset_id FROM canca.workspace_interface_observations "
+            "WHERE workspace_id='A' AND collection_id='batch-conflict'").fetchall()
+        self.assertEqual(rows,[('divergent',)])
+
     def test_actual_writer_rolls_back_first_insert_if_second_fails(self):
         from contextlib import nullcontext
         items=[dict(interface_ordinal=n,interface_alias='eth0',
