@@ -191,5 +191,29 @@ class WriterTests(unittest.TestCase):
         conn.execute.assert_not_called()
         conn.transaction.assert_not_called()
 
+    def test_equal_filenames_with_distinct_verified_hashes_keep_asset_ownership(self):
+        entries=[
+            dict(interface_ordinal=0,interface_alias='eth0',
+                 address='192.0.2.'+str(10+i),prefix_length=24,
+                 source_path='ssh.json',source_sha256=sha*64)
+            for i,sha in enumerate(('a','b'))]
+        projection={'observations':[
+            {'source_asset_id':asset,
+             'source_refs':[dict(role='credentialed_evidence',
+                                 path='ssh.json',sha256=sha*64)]}
+            for asset,sha in (('asset-A','a'),('asset-B','b'))]}
+        conn=MagicMock()
+        conn.execute.return_value.fetchone.return_value=('inserted',)
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.inventory,'inventory',return_value={'interfaces':entries}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=projection),patch.object(
+                writer.model,'scope'),patch.object(writer.pg,'schema_check'):
+            result=writer.persist_verified_interfaces(conn,'A',Mock(),Path('.'),
+                                                     Path('.'),'batch-two-sources')
+        self.assertEqual(result['observation_count'],2)
+        self.assertEqual(result['inserted_count'],2)
+        owners={call.args[1][5]:call.args[1][3] for call in conn.execute.call_args_list}
+        self.assertEqual(owners,{'a'*64:'asset-A','b'*64:'asset-B'})
+
 if __name__=='__main__':
     unittest.main()
