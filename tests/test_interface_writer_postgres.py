@@ -203,6 +203,31 @@ class InterfaceWriterSQLTests(unittest.TestCase):
             "SELECT count(*) FROM canca.workspace_interface_observations "
             "WHERE collection_id='batch-recovery'").fetchone()[0],2)
 
+    def test_same_collection_and_evidence_remain_separate_across_workspaces(self):
+        # Real SQL primary key must include workspace, not only observation ID.
+        item=dict(interface_ordinal=0,interface_alias='eth0',address='192.0.2.10',
+                  prefix_length=24,source_path='ssh.json',source_sha256='a'*64)
+        projection={'observations':[{'source_asset_id':'asset-a',
+            'source_refs':[dict(role='credentialed_evidence',
+                                path='ssh.json',sha256='a'*64)]}]}
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.model,'scope',side_effect=lambda *args,**kwargs: self.conn.transaction()),patch.object(
+                writer.inventory,'inventory',return_value={'interfaces':[item]}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=projection):
+            a=writer.persist_verified_interfaces(self.conn,'A',Mock(),Path('.'),
+                                                 Path('.'),'batch-shared')
+            b=writer.persist_verified_interfaces(self.conn,'B',Mock(),Path('.'),
+                                                 Path('.'),'batch-shared')
+            replay_a=writer.persist_verified_interfaces(self.conn,'A',Mock(),Path('.'),
+                                                        Path('.'),'batch-shared')
+        self.assertEqual((a['inserted_count'],b['inserted_count'],
+                          replay_a['inserted_count']),(1,1,0))
+        rows=self.conn.execute(
+            "SELECT workspace_id,count(*) FROM canca.workspace_interface_observations "
+            "WHERE collection_id='batch-shared' GROUP BY workspace_id "
+            "ORDER BY workspace_id").fetchall()
+        self.assertEqual(rows,[('A',1),('B',1)])
+
     def test_failed_batch_rolls_back_every_record(self):
         rows=[("A","batch-1","ifobs-"+"a"*32,"asset-a","ssh.json","a"*64,0,
                "eth0","192.0.2.10",24),
