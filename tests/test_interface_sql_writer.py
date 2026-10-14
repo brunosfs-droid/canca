@@ -155,5 +155,22 @@ class WriterTests(unittest.TestCase):
         conn.execute.assert_not_called()
         conn.transaction.assert_not_called()
 
+    def test_invalid_batch_and_limit_fail_before_evidence_access(self):
+        conn=MagicMock()
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.inventory,'inventory') as inventory_read,patch.object(
+                writer.inventory.registry,'prepare_assets') as projection_read:
+            for collection_id,limit in (('',100),('batch',0),('batch',101),
+                                        ('batch',True),(None,100)):
+                with self.subTest(collection_id=collection_id,limit=limit):
+                    with self.assertRaises(writer.pg.PersistenceError):
+                        writer.persist_verified_interfaces(
+                            conn,'A',Mock(),Path('.'),Path('.'),collection_id,
+                            limit=limit)
+        inventory_read.assert_not_called()
+        projection_read.assert_not_called()
+        conn.execute.assert_not_called()
+        conn.transaction.assert_not_called()
+
 if __name__=='__main__':
     unittest.main()
