@@ -19,6 +19,34 @@ class InterfaceWriterSQLTests(unittest.TestCase):
         self.conn.execute("INSERT INTO canca.workspaces(workspace_id,name,organization) "
                           "VALUES ('A','Lab A',''),('B','Lab B','')")
 
+    def test_real_coordinator_session_lease_starts_on_schema_v11(self):
+        from psycopg import sql
+        import P01_Workspace_Coordinator as runtime
+        role='canca_interface_coord_ci'
+        if not self.conn.execute(
+                'SELECT 1 FROM pg_roles WHERE rolname=%s',(role,)).fetchone():
+            self.conn.execute(sql.SQL(
+                'CREATE ROLE {} NOLOGIN NOSUPERUSER NOBYPASSRLS').format(
+                    sql.Identifier(role)))
+        self.conn.execute(sql.SQL(
+            'GRANT USAGE ON SCHEMA canca TO {}').format(sql.Identifier(role)))
+        self.conn.execute(sql.SQL(
+            'GRANT SELECT ON canca.schema_migrations TO {}').format(sql.Identifier(role)))
+        self.conn.execute(sql.SQL(
+            'GRANT SELECT,UPDATE ON canca.workspace_runtime TO {}').format(
+                sql.Identifier(role)))
+        runtime.provision(self.conn,role)
+        connection=pg.open_connection()
+        self.addCleanup(connection.close)
+        connection.execute(sql.SQL('SET ROLE {}').format(sql.Identifier(role)))
+        lease=runtime.SessionLease(connection)
+        generation=lease.start()
+        try:
+            self.assertGreaterEqual(generation,1)
+            self.assertEqual(lease.transition(generation,'open','A'),generation+1)
+        finally:
+            lease.stop(generation+1)
+
     def test_actual_writer_inserts_and_replays_on_postgres(self):
         # Real SQL inserts and replay, with scope mocked only to avoid
         # requiring a separately provisioned workspace coordinator lease.
