@@ -240,5 +240,27 @@ class WriterTests(unittest.TestCase):
         self.assertEqual(owners,{'host-a/ssh.json':'asset-A',
                                  'host-b/ssh.json':'asset-B'})
 
+    def test_replayed_batch_still_checks_commit_lease(self):
+        entry=dict(interface_ordinal=0,interface_alias='eth0',
+                   address='192.0.2.10',prefix_length=24,
+                   source_path='ssh.json',source_sha256='a'*64)
+        projection={'observations':[{
+            'source_asset_id':'asset-1',
+            'source_refs':[dict(role='credentialed_evidence',
+                                path='ssh.json',sha256='a'*64)]}]}
+        prior=('asset-1','ssh.json','a'*64,0,'eth0','192.0.2.10',24)
+        conn=MagicMock()
+        conn.execute.return_value.fetchone.side_effect=[None,prior]
+        fence=Mock(side_effect=writer.pg.PersistenceError('workspace_lease_lost'))
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.inventory,'inventory',return_value={'interfaces':[entry]}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=projection),patch.object(
+                writer.model,'scope'),patch.object(writer.pg,'schema_check'):
+            with self.assertRaisesRegex(writer.pg.PersistenceError,'workspace_lease_lost'):
+                writer.persist_verified_interfaces(conn,'A',Mock(),Path('.'),
+                                                   Path('.'),'batch-replay',before_commit=fence)
+        fence.assert_called_once_with()
+        self.assertEqual(conn.execute.call_count,2)
+
 if __name__=='__main__':
     unittest.main()
