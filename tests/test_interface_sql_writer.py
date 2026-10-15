@@ -262,5 +262,21 @@ class WriterTests(unittest.TestCase):
         fence.assert_called_once_with()
         self.assertEqual(conn.execute.call_count,2)
 
+    def test_empty_verified_batch_still_requires_valid_write_lease(self):
+        # An empty collection must not be reported as committed if its lease
+        # was revoked; scope and the commit fence are mandatory even for zero rows.
+        conn=MagicMock()
+        fence=Mock(side_effect=writer.pg.PersistenceError('workspace_lease_lost'))
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.inventory,'inventory',return_value={'interfaces':[]}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value={'observations':[]}),patch.object(
+                writer.model,'scope') as scope,patch.object(writer.pg,'schema_check'):
+            with self.assertRaisesRegex(writer.pg.PersistenceError,'workspace_lease_lost'):
+                writer.persist_verified_interfaces(conn,'A',Mock(),Path('.'),
+                                                   Path('.'),'batch-empty',before_commit=fence)
+        scope.assert_called_once()
+        fence.assert_called_once_with()
+        conn.execute.assert_not_called()
+
 if __name__=='__main__':
     unittest.main()
