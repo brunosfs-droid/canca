@@ -141,6 +141,34 @@ class InterfaceWriterSQLTests(unittest.TestCase):
             "SELECT count(*) FROM canca.workspace_interface_observations "
             "WHERE collection_id='batch-cross-workspace'").fetchone()[0],0)
 
+    def test_real_write_grant_passes_workspace_permission_gate(self):
+        # Positive half of grant authorization: no model/lease functions are
+        # mocked here. The lower-level workspace gate accepts a real write grant.
+        from psycopg import sql
+        import P01_Workspace as ws
+        role='canca_interface_writer_gate_ci'
+        if not self.conn.execute(
+                'SELECT 1 FROM pg_roles WHERE rolname=%s',(role,)).fetchone():
+            self.conn.execute(sql.SQL(
+                'CREATE ROLE {} NOLOGIN NOSUPERUSER NOBYPASSRLS').format(
+                sql.Identifier(role)))
+        for statement in (
+                'GRANT USAGE ON SCHEMA canca TO {}',
+                'GRANT SELECT ON canca.schema_migrations TO {}',
+                'GRANT SELECT ON canca.workspace_grants TO {}'):
+            self.conn.execute(sql.SQL(statement).format(sql.Identifier(role)))
+        ws.grant_workspace(self.conn,'A',role,'workspace:write')
+        actor=pg.open_connection()
+        self.addCleanup(actor.close)
+        actor.execute(sql.SQL('SET ROLE {}').format(sql.Identifier(role)))
+        with ws.scope(actor,'A','workspace:write'):
+            self.assertEqual(actor.execute(
+                "SELECT current_setting('canca.workspace_id',true)"
+            ).fetchone()[0],'A')
+        self.assertEqual(actor.execute(
+            "SELECT coalesce(current_setting('canca.workspace_id',true),'')"
+        ).fetchone()[0],'')
+
     def test_actual_writer_inserts_and_replays_on_postgres(self):
         # Real SQL inserts and replay, with scope mocked only to avoid
         # requiring a separately provisioned workspace coordinator lease.
