@@ -169,6 +169,36 @@ class InterfaceWriterSQLTests(unittest.TestCase):
             "SELECT coalesce(current_setting('canca.workspace_id',true),'')"
         ).fetchone()[0],'')
 
+    def test_write_scope_failure_does_not_leak_workspace_context(self):
+        from psycopg import sql
+        import P01_Workspace as ws
+        role='canca_interface_scope_abort_ci'
+        if not self.conn.execute(
+                'SELECT 1 FROM pg_roles WHERE rolname=%s',(role,)).fetchone():
+            self.conn.execute(sql.SQL(
+                'CREATE ROLE {} NOLOGIN NOSUPERUSER NOBYPASSRLS').format(
+                sql.Identifier(role)))
+        for statement in (
+                'GRANT USAGE ON SCHEMA canca TO {}',
+                'GRANT SELECT ON canca.schema_migrations TO {}',
+                'GRANT SELECT ON canca.workspace_grants TO {}'):
+            self.conn.execute(sql.SQL(statement).format(sql.Identifier(role)))
+        ws.grant_workspace(self.conn,'A',role,'workspace:write')
+        actor=pg.open_connection()
+        self.addCleanup(actor.close)
+        actor.execute(sql.SQL('SET ROLE {}').format(sql.Identifier(role)))
+        with self.assertRaisesRegex(pg.PersistenceError,'synthetic_abort'):
+            with ws.scope(actor,'A','workspace:write'):
+                self.assertEqual(actor.execute(
+                    "SELECT current_setting('canca.workspace_id',true)"
+                ).fetchone()[0],'A')
+                raise pg.PersistenceError('synthetic_abort')
+        # Context is transactional; neither failed writes nor local scope
+        # settings may survive an aborted operation on a reused connection.
+        self.assertEqual(actor.execute(
+            "SELECT coalesce(current_setting('canca.workspace_id',true),'')"
+        ).fetchone()[0],'')
+
     def test_actual_writer_inserts_and_replays_on_postgres(self):
         # Real SQL inserts and replay, with scope mocked only to avoid
         # requiring a separately provisioned workspace coordinator lease.
