@@ -304,6 +304,31 @@ class InterfaceWriterSQLTests(unittest.TestCase):
             "SELECT count(*) FROM canca.workspace_interface_observations "
             "WHERE workspace_id='A' AND collection_id='batch-after-stop'"
         ).fetchone()[0],0)
+        # Restart the trusted coordinator. The stale token must remain
+        # unusable even though workspace A is open again for a fresh lease.
+        next_conn=pg.open_connection()
+        self.addCleanup(next_conn.close)
+        next_conn.execute(sql.SQL('SET ROLE {}').format(sql.Identifier(coordinator_role)))
+        new_lease=runtime.SessionLease(next_conn)
+        next_start=new_lease.start()
+        next_generation=new_lease.transition(next_start,'open','A')
+        fresh_token=runtime.Token('A',next_generation,new_lease.lease_id)
+        try:
+            with patch.object(writer.inventory,'inventory',
+                    return_value={'interfaces':[item]}),patch.object(
+                    writer.inventory.registry,'prepare_assets',return_value=projection):
+                with self.assertRaisesRegex(pg.PersistenceError,'model_context_denied'):
+                    writer.persist_verified_interfaces(
+                        actor,'A',token,Path('.'),Path('.'),'batch-stale-generation')
+                fresh=writer.persist_verified_interfaces(
+                    actor,'A',fresh_token,Path('.'),Path('.'),'batch-fresh-generation')
+            self.assertEqual(fresh['inserted_count'],1)
+            self.assertEqual(self.conn.execute(
+                "SELECT count(*) FROM canca.workspace_interface_observations "
+                "WHERE workspace_id='A' AND collection_id='batch-stale-generation'"
+            ).fetchone()[0],0)
+        finally:
+            new_lease.stop(next_generation)
 
     def test_actual_writer_inserts_and_replays_on_postgres(self):
         # Real SQL inserts and replay, with scope mocked only to avoid
