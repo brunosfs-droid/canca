@@ -292,6 +292,18 @@ class InterfaceWriterSQLTests(unittest.TestCase):
             ).fetchone()[0],1)
         finally:
             lease.stop(generation)
+        # The same actor, write grant and token must be rejected after the
+        # real coordinator session releases its PostgreSQL advisory lease.
+        with patch.object(writer.inventory,'inventory',
+                return_value={'interfaces':[item]}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=projection):
+            with self.assertRaisesRegex(pg.PersistenceError,'model_context_denied'):
+                writer.persist_verified_interfaces(
+                    actor,'A',token,Path('.'),Path('.'),'batch-after-stop')
+        self.assertEqual(self.conn.execute(
+            "SELECT count(*) FROM canca.workspace_interface_observations "
+            "WHERE workspace_id='A' AND collection_id='batch-after-stop'"
+        ).fetchone()[0],0)
 
     def test_actual_writer_inserts_and_replays_on_postgres(self):
         # Real SQL inserts and replay, with scope mocked only to avoid
