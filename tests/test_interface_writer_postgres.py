@@ -230,6 +230,69 @@ class InterfaceWriterSQLTests(unittest.TestCase):
             "SELECT coalesce(current_setting('canca.workspace_id',true),'')"
         ).fetchone()[0],'')
 
+    def test_live_lease_authorizes_actual_writer_and_idempotent_replay(self):
+        # No mocks of scope, token, RLS, SQL writer or coordinator lease.
+        from psycopg import sql
+        import P01_Workspace as ws
+        import P01_Workspace_Coordinator as runtime
+        coordinator_role='canca_interface_live_coord_ci'
+        actor_role='canca_interface_live_writer_ci'
+        for role in (coordinator_role,actor_role):
+            if not self.conn.execute(
+                    'SELECT 1 FROM pg_roles WHERE rolname=%s',(role,)).fetchone():
+                self.conn.execute(sql.SQL(
+                    'CREATE ROLE {} NOLOGIN NOSUPERUSER NOBYPASSRLS'
+                ).format(sql.Identifier(role)))
+            self.conn.execute(sql.SQL('GRANT USAGE ON SCHEMA canca TO {}').format(
+                sql.Identifier(role)))
+            self.conn.execute(sql.SQL('GRANT SELECT ON canca.schema_migrations TO {}').format(
+                sql.Identifier(role)))
+        for grant in (
+                'GRANT SELECT,UPDATE ON canca.workspace_runtime TO {}',
+        ):
+            self.conn.execute(sql.SQL(grant).format(sql.Identifier(coordinator_role)))
+        for grant in (
+                'GRANT SELECT ON canca.workspace_grants TO {}',
+                'GRANT SELECT,INSERT ON canca.workspace_interface_observations TO {}',
+                'GRANT EXECUTE ON FUNCTION canca.workspace_model_allowed(boolean) TO {}',
+                'GRANT EXECUTE ON FUNCTION canca.workspace_revision_lock(boolean) TO {}',
+                'GRANT EXECUTE ON FUNCTION canca.workspace_active_fence() TO {}',
+        ):
+            self.conn.execute(sql.SQL(grant).format(sql.Identifier(actor_role)))
+        ws.grant_workspace(self.conn,'A',actor_role,'workspace:write')
+        runtime.provision(self.conn,coordinator_role)
+        lease_conn=pg.open_connection()
+        self.addCleanup(lease_conn.close)
+        lease_conn.execute(sql.SQL('SET ROLE {}').format(sql.Identifier(coordinator_role)))
+        lease=runtime.SessionLease(lease_conn)
+        started=lease.start()
+        generation=lease.transition(started,'open','A')
+        actor=pg.open_connection()
+        self.addCleanup(actor.close)
+        actor.execute(sql.SQL('SET ROLE {}').format(sql.Identifier(actor_role)))
+        item=dict(interface_ordinal=0,interface_alias='eth0',
+                  address='192.0.2.10',prefix_length=24,
+                  source_path='ssh.json',source_sha256='a'*64)
+        projection={'observations':[{'source_asset_id':'asset-a',
+            'source_refs':[dict(role='credentialed_evidence',
+                                path='ssh.json',sha256='a'*64)]}]}
+        token=runtime.Token('A',generation,lease.lease_id)
+        try:
+            with patch.object(writer.inventory,'inventory',
+                    return_value={'interfaces':[item]}),patch.object(
+                    writer.inventory.registry,'prepare_assets',return_value=projection):
+                first=writer.persist_verified_interfaces(
+                    actor,'A',token,Path('.'),Path('.'),'batch-live')
+                replay=writer.persist_verified_interfaces(
+                    actor,'A',token,Path('.'),Path('.'),'batch-live')
+            self.assertEqual((first['inserted_count'],replay['inserted_count']),(1,0))
+            self.assertEqual(self.conn.execute(
+                "SELECT count(*) FROM canca.workspace_interface_observations "
+                "WHERE workspace_id='A' AND collection_id='batch-live'"
+            ).fetchone()[0],1)
+        finally:
+            lease.stop(generation)
+
     def test_actual_writer_inserts_and_replays_on_postgres(self):
         # Real SQL inserts and replay, with scope mocked only to avoid
         # requiring a separately provisioned workspace coordinator lease.
