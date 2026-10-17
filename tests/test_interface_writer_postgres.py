@@ -327,6 +327,19 @@ class InterfaceWriterSQLTests(unittest.TestCase):
                 "SELECT count(*) FROM canca.workspace_interface_observations "
                 "WHERE workspace_id='A' AND collection_id='batch-stale-generation'"
             ).fetchone()[0],0)
+            # Changing the live coordinator workspace increments the generation.
+            # A previously valid A token cannot persist once B becomes active.
+            next_generation=new_lease.transition(next_generation,'open','B')
+            with patch.object(writer.inventory,'inventory',
+                    return_value={'interfaces':[item]}),patch.object(
+                    writer.inventory.registry,'prepare_assets',return_value=projection):
+                with self.assertRaisesRegex(pg.PersistenceError,'model_context_denied'):
+                    writer.persist_verified_interfaces(
+                        actor,'A',fresh_token,Path('.'),Path('.'),'batch-after-switch')
+            self.assertEqual(self.conn.execute(
+                "SELECT count(*) FROM canca.workspace_interface_observations "
+                "WHERE collection_id='batch-after-switch'"
+            ).fetchone()[0],0)
         finally:
             new_lease.stop(next_generation)
 
