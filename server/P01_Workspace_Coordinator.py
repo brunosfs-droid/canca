@@ -39,12 +39,22 @@ def authorize(conn, workspace_id, permission, target):
         pass
 
 
+def check_coordinator_schema(conn):
+    """Accept the hash-verified v11 interface extension; reject any other drift."""
+    try:
+        pg.schema_check(conn, minimum=6, intents=True)
+    except pg.PersistenceError as exc:
+        if str(exc) != 'schema_mismatch':
+            raise
+        pg.schema_check(conn, minimum=11, interfaces=True)
+
+
 def provision(conn, principal_role):
     """Maintenance only; this role must never be used as a human/content identity."""
     ws.identifier(principal_role)
     pg.guard_connection(conn)
     with conn.transaction():
-        pg.timeout(conn); pg.schema_check(conn, minimum=6, intents=True); ws.admin(conn)
+        pg.timeout(conn); check_coordinator_schema(conn); ws.admin(conn)
         role = conn.execute('SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=%s', (principal_role,)).fetchone()
         pg.require(role and not any(role), 'workspace_role_invalid')
         conn.execute('SELECT pg_advisory_xact_lock(%s)', (pg.lock_key('coordinator-provision'),))
@@ -69,7 +79,7 @@ class SessionLease:
         pg.guard_connection(self.conn)
         try:
             with self.conn.transaction():
-                pg.timeout(self.conn); pg.schema_check(self.conn, minimum=6, intents=True)
+                pg.timeout(self.conn); check_coordinator_schema(self.conn)
                 role = self.conn.execute('SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname=current_user').fetchone()
                 pg.require(role and not role[0], 'workspace_role_invalid')
                 self.held = self.conn.execute('SELECT pg_try_advisory_lock(%s)', (LOCK_KEY,)).fetchone()[0]

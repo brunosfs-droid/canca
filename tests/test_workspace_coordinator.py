@@ -17,6 +17,24 @@ import test_postgres_workspace as foundation
 pg, ws = runtime.pg, runtime.ws
 
 
+class CoordinatorSchemaCompatibilityTests(unittest.TestCase):
+    def test_verified_interface_schema_fallback(self):
+        conn=Mock()
+        with patch.object(pg,'schema_check',side_effect=[
+                pg.PersistenceError('schema_mismatch'),None]) as check:
+            runtime.check_coordinator_schema(conn)
+        self.assertEqual(check.call_count,2)
+        self.assertEqual(check.call_args.kwargs,{'minimum':11,'interfaces':True})
+
+    def test_other_schema_errors_fail_closed(self):
+        conn=Mock()
+        with patch.object(pg,'schema_check',side_effect=pg.PersistenceError(
+                'database_failed')) as check:
+            with self.assertRaisesRegex(pg.PersistenceError,'database_failed'):
+                runtime.check_coordinator_schema(conn)
+        check.assert_called_once()
+
+
 class MemoryLease:
     """Deterministic fault injection only; SQL semantics are tested separately."""
     def __init__(self):
