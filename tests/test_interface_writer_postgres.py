@@ -671,6 +671,44 @@ class InterfaceWriterSQLTests(unittest.TestCase):
                     self.conn,'A',Mock(),Path('.'),Path('.'),'batch-recovered-alias')
         self.assertEqual(recovered['inserted_count'],1)
 
+    def test_interface_writer_role_cannot_update_or_delete_history(self):
+        # INSERT privileges must not imply mutation of previously recorded evidence.
+        from psycopg import sql
+        from psycopg.errors import InsufficientPrivilege
+        role='canca_interface_append_only_ci'
+        if not self.conn.execute(
+                'SELECT 1 FROM pg_roles WHERE rolname=%s',(role,)).fetchone():
+            self.conn.execute(sql.SQL(
+                'CREATE ROLE {} NOLOGIN NOSUPERUSER NOBYPASSRLS'
+            ).format(sql.Identifier(role)))
+        self.conn.execute(sql.SQL(
+            'GRANT USAGE ON SCHEMA canca TO {}').format(sql.Identifier(role)))
+        self.conn.execute(sql.SQL(
+            'GRANT SELECT,INSERT ON canca.workspace_interface_observations TO {}'
+        ).format(sql.Identifier(role)))
+        self.conn.execute(
+            "INSERT INTO canca.workspace_interface_observations "
+            "(workspace_id,collection_id,observation_id,source_asset_id,"
+            "source_path,source_sha256,interface_ordinal,interface_alias,"
+            "ipv4_address,prefix_length) "
+            "VALUES ('A','append-only','ifobs-'||repeat('a',32),'asset-a',"
+            "'ssh.json',repeat('a',64),0,'eth0','192.0.2.10',24)")
+        actor=pg.open_connection()
+        self.addCleanup(actor.close)
+        actor.execute(sql.SQL('SET ROLE {}').format(sql.Identifier(role)))
+        for statement in (
+                "UPDATE canca.workspace_interface_observations "
+                "SET interface_alias='changed' WHERE workspace_id='A'",
+                "DELETE FROM canca.workspace_interface_observations "
+                "WHERE workspace_id='A'"):
+            with self.assertRaises(InsufficientPrivilege):
+                with actor.transaction():
+                    actor.execute(statement)
+        self.assertEqual(self.conn.execute(
+            "SELECT interface_alias FROM canca.workspace_interface_observations "
+            "WHERE workspace_id='A' AND collection_id='append-only'"
+        ).fetchone()[0],'eth0')
+
     def test_failed_batch_rolls_back_every_record(self):
         rows=[("A","batch-1","ifobs-"+"a"*32,"asset-a","ssh.json","a"*64,0,
                "eth0","192.0.2.10",24),
