@@ -700,7 +700,8 @@ class InterfaceWriterSQLTests(unittest.TestCase):
                 "UPDATE canca.workspace_interface_observations "
                 "SET interface_alias='changed' WHERE workspace_id='A'",
                 "DELETE FROM canca.workspace_interface_observations "
-                "WHERE workspace_id='A'"):
+                "WHERE workspace_id='A'",
+                "TRUNCATE TABLE canca.workspace_interface_observations"):
             with self.assertRaises(InsufficientPrivilege):
                 with actor.transaction():
                     actor.execute(statement)
