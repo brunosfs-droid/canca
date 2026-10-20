@@ -671,6 +671,19 @@ class InterfaceWriterSQLTests(unittest.TestCase):
                     self.conn,'A',Mock(),Path('.'),Path('.'),'batch-recovered-alias')
         self.assertEqual(recovered['inserted_count'],1)
 
+    def test_interface_history_primary_key_scopes_batch_and_observation(self):
+        # A migration must never weaken tenant isolation or collection history
+        # by changing the composite primary key.
+        key=self.conn.execute(
+            "SELECT array_agg(a.attname ORDER BY k.ordinality) "
+            "FROM pg_constraint c "
+            "JOIN unnest(c.conkey) WITH ORDINALITY AS k(attnum,ordinality) ON true "
+            "JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.attnum "
+            "WHERE c.conrelid='canca.workspace_interface_observations'::regclass "
+            "AND c.contype='p'"
+        ).fetchone()[0]
+        self.assertEqual(key,['workspace_id','collection_id','observation_id'])
+
     def test_interface_history_table_enforces_rls_and_has_no_mutation_policies(self):
         # Guard the append-only schema contract against accidental migration drift.
         table=self.conn.execute(
