@@ -736,6 +736,32 @@ class InterfaceWriterSQLTests(unittest.TestCase):
             "WHERE workspace_id='A' AND collection_id='append-only'"
         ).fetchone()[0],'eth0')
 
+    def test_idempotent_replay_preserves_original_observed_at(self):
+        # Replay must never silently refresh the observation timestamp.
+        item=dict(interface_ordinal=0,interface_alias='eth0',
+                  address='192.0.2.10',prefix_length=24,
+                  source_path='ssh.json',source_sha256='a'*64)
+        projection={'observations':[{'source_asset_id':'asset-a',
+            'source_refs':[dict(role='credentialed_evidence',
+                                path='ssh.json',sha256='a'*64)]}]}
+        with patch.object(writer.model,'token_args'),patch.object(
+                writer.model,'scope',side_effect=lambda *args,**kwargs: self.conn.transaction()),patch.object(
+                writer.inventory,'inventory',return_value={'interfaces':[item]}),patch.object(
+                writer.inventory.registry,'prepare_assets',return_value=projection):
+            first=writer.persist_verified_interfaces(
+                self.conn,'A',Mock(),Path('.'),Path('.'),'batch-timestamp')
+            stored=self.conn.execute(
+                "SELECT observation_id,observed_at FROM canca.workspace_interface_observations "
+                "WHERE workspace_id='A' AND collection_id='batch-timestamp'"
+            ).fetchone()
+            replay=writer.persist_verified_interfaces(
+                self.conn,'A',Mock(),Path('.'),Path('.'),'batch-timestamp')
+        self.assertEqual((first['inserted_count'],replay['inserted_count']),(1,0))
+        self.assertEqual(self.conn.execute(
+            "SELECT observation_id,observed_at FROM canca.workspace_interface_observations "
+            "WHERE workspace_id='A' AND collection_id='batch-timestamp'"
+        ).fetchone(),stored)
+
     def test_failed_batch_rolls_back_every_record(self):
         rows=[("A","batch-1","ifobs-"+"a"*32,"asset-a","ssh.json","a"*64,0,
                "eth0","192.0.2.10",24),
