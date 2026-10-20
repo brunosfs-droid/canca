@@ -671,6 +671,19 @@ class InterfaceWriterSQLTests(unittest.TestCase):
                     self.conn,'A',Mock(),Path('.'),Path('.'),'batch-recovered-alias')
         self.assertEqual(recovered['inserted_count'],1)
 
+    def test_interface_history_table_enforces_rls_and_has_no_mutation_policies(self):
+        # Guard the append-only schema contract against accidental migration drift.
+        table=self.conn.execute(
+            "SELECT relrowsecurity,relforcerowsecurity FROM pg_class "
+            "WHERE oid='canca.workspace_interface_observations'::regclass"
+        ).fetchone()
+        self.assertEqual(table,(True,True))
+        policies=self.conn.execute(
+            "SELECT cmd FROM pg_policies WHERE schemaname='canca' "
+            "AND tablename='workspace_interface_observations' ORDER BY cmd"
+        ).fetchall()
+        self.assertEqual([item[0] for item in policies],['INSERT','SELECT'])
+
     def test_interface_writer_role_cannot_update_or_delete_history(self):
         # INSERT privileges must not imply mutation of previously recorded evidence.
         from psycopg import sql
