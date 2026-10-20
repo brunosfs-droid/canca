@@ -403,12 +403,21 @@ class InterfaceWriterSQLTests(unittest.TestCase):
                 with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
                     writer.persist_verified_interfaces(
                         actor,'A',token,Path('.'),Path('.'),'batch-after-revoke')
+                # Restoring the grant must permit a legitimate retry on the
+                # same actor session and still preserve the original history.
+                ws.grant_workspace(self.conn,'A',actor_role,'workspace:write')
+                recovered=writer.persist_verified_interfaces(
+                    actor,'A',token,Path('.'),Path('.'),'batch-after-revoke')
+                replay=writer.persist_verified_interfaces(
+                    actor,'A',token,Path('.'),Path('.'),'batch-after-revoke')
+                self.assertEqual((recovered['inserted_count'],
+                                  replay['inserted_count']),(1,0))
             self.assertEqual(self.conn.execute(
                 "SELECT count(*) FROM canca.workspace_interface_observations "
                 "WHERE collection_id='batch-before-revoke'").fetchone()[0],1)
             self.assertEqual(self.conn.execute(
                 "SELECT count(*) FROM canca.workspace_interface_observations "
-                "WHERE collection_id='batch-after-revoke'").fetchone()[0],0)
+                "WHERE collection_id='batch-after-revoke'").fetchone()[0],1)
         finally:
             lease.stop(generation)
 
