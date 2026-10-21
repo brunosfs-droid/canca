@@ -63,3 +63,35 @@ Writer `persistence/P01_Interface_SQL_Writer.py`, migração opt-in 0011, `P01_W
 - Dependência de contêiner corrigida nos dois workflows: `public.ecr.aws/docker/library/postgres` substituída por `postgres`; falhas anteriores de *Initialize containers* decorriam de `toomanyrequests: Data limit exceeded` no ECR Public.
 - Estes resultados são vinculados ao SHA acima. **Se houver novo commit, a matriz inteira precisa ser reconfirmada no novo SHA.**
 - Permanecem pendentes: execução E0 com bundle do EVE-NG, evidência de restauração operacional, registro de aprovação e decisão de liberação.
+
+## Registro mais recente de CI — 6cd1f68
+
+SHA: `6cd1f68f9b50c506ee8916e7d3903da4c23dd7f0`. Oito workflows **success**:
+- PostgreSQL CI `39669735010`
+- Workspace Foundation CI `39669735361`
+- Python CI `39669735018`
+- CodeQL `39669735547`
+- Operator Web CI `39669735069`
+- Operator Accounts CI `39669735035`
+- Read-only SNMP CI `39669734875`
+- Optional Agent CI `39669735070`
+
+### Modelo de evidência da sessão E0
+
+Preencher durante a execução, sem publicar segredos ou dados identificáveis:
+
+| Campo | Valor |
+| --- | --- |
+| Commit/branch validado | PENDENTE |
+| Data UTC e operador | PENDENTE |
+| Versão PostgreSQL e schema/checagem | PENDENTE |
+| Ambiente e origem do bundle verificado (IDs não sensíveis) | PENDENTE |
+| SHA-256 do bundle e quantidade de interfaces | PENDENTE |
+| Escrita inicial / replay / segunda coleta | PENDENTE |
+| Revogação de grant e isolamento de workspace | PENDENTE |
+| Encerramento/troca de lease e tokens obsoletos | PENDENTE |
+| Falha transacional, retry, backup e restore | PENDENTE |
+| Evidências/logs higienizados | PENDENTE |
+| Desvios, responsável pela correção, decisão | PENDENTE |
+
+**Não interpretar este modelo como execução realizada.** As evidências operacionais continuam pendentes.
