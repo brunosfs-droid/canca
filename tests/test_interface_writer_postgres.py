@@ -295,6 +295,17 @@ class InterfaceWriterSQLTests(unittest.TestCase):
                     "SELECT count(*) FROM canca.workspace_interface_observations "
                     "WHERE workspace_id='A' AND collection_id='batch-forged-lease'"
                 ).fetchone()[0],0)
+                # Matching lease ID alone is insufficient: the active
+                # generation must also match the coordinator runtime row.
+                stale_generation=runtime.Token('A',generation-1,lease.lease_id)
+                with self.assertRaisesRegex(pg.PersistenceError,'model_context_denied'):
+                    writer.persist_verified_interfaces(
+                        actor,'A',stale_generation,Path('.'),Path('.'),
+                        'batch-forged-generation')
+                self.assertEqual(self.conn.execute(
+                    "SELECT count(*) FROM canca.workspace_interface_observations "
+                    "WHERE workspace_id='A' AND collection_id='batch-forged-generation'"
+                ).fetchone()[0],0)
                 # The real scoped transaction must roll back if the final
                 # operation fence rejects the commit, even with a live lease.
                 with self.assertRaisesRegex(pg.PersistenceError,'workspace_lease_lost'):
