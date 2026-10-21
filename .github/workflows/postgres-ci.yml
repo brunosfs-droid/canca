@@ -50,6 +50,14 @@ jobs:
             echo "R03 preflight ran without disposable database confirmation" >&2
             exit 1
           fi
+          if env -u PGHOST -u PGDATABASE -u PGUSER CANCA_E0_DISPOSABLE_DB=YES bash docs/validation/R03_E0_PREFLIGHT.sh; then
+            echo "R03 preflight ran without mandatory PostgreSQL connection settings" >&2
+            exit 1
+          fi
+          if env PGSERVICE=untrusted CANCA_E0_DISPOSABLE_DB=YES bash docs/validation/R03_E0_PREFLIGHT.sh; then
+            echo "R03 preflight accepted unsupported PGSERVICE configuration" >&2
+            exit 1
+          fi
       - name: Install optional PostgreSQL driver
         run: python -m pip install -r persistence/requirements-postgres.txt
       - name: Compile persistence
