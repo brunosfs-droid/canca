@@ -51,3 +51,15 @@ Writer `persistence/P01_Interface_SQL_Writer.py`, migração opt-in 0011, `P01_W
 | Falha e recuperação SQL | `test_sql_constraint_abort_leaves_connection_reusable_for_next_batch` |
 
 **Critério de aprovação:** consultar cada nome no log do `PostgreSQL CI` na versão 16 e 17. O nome no código não representa aprovação até que a execução no SHA de release seja confirmada. A etapa E0 com evidência real permanece separada.
+
+## Evidência CI consolidada — candidato 973e32a (não é homologação E0)
+
+- Commit validado: `973e32a2c74a28e12505e67fb67c0706d7d9b03f`.
+- PostgreSQL CI: **success**, run `39667054149`, matrizes 16 e 17.
+- Workspace Foundation CI: **success**, run `39667054777`, matrizes 16 e 17.
+- Python CI: `39667054551` (success); CodeQL: `39667054449` (success).
+- Operator Web CI: `39667054528` (success); Operator Accounts CI: `39667054296` (success).
+- Read-only SNMP CI: `39667054132` (success); Optional Agent CI: `39667054278` (success).
+- Dependência de contêiner corrigida nos dois workflows: `public.ecr.aws/docker/library/postgres` substituída por `postgres`; falhas anteriores de *Initialize containers* decorriam de `toomanyrequests: Data limit exceeded` no ECR Public.
+- Estes resultados são vinculados ao SHA acima. **Se houver novo commit, a matriz inteira precisa ser reconfirmada no novo SHA.**
+- Permanecem pendentes: execução E0 com bundle do EVE-NG, evidência de restauração operacional, registro de aprovação e decisão de liberação.
