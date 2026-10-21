@@ -285,6 +285,16 @@ class InterfaceWriterSQLTests(unittest.TestCase):
                     actor,'A',token,Path('.'),Path('.'),'batch-live')
                 replay=writer.persist_verified_interfaces(
                     actor,'A',token,Path('.'),Path('.'),'batch-live')
+                # A forged lease identifier must fail even while the real
+                # coordinator is open and the PostgreSQL actor has write grant.
+                forged=runtime.Token('A',generation,'f'*32)
+                with self.assertRaisesRegex(pg.PersistenceError,'model_context_denied'):
+                    writer.persist_verified_interfaces(
+                        actor,'A',forged,Path('.'),Path('.'),'batch-forged-lease')
+                self.assertEqual(self.conn.execute(
+                    "SELECT count(*) FROM canca.workspace_interface_observations "
+                    "WHERE workspace_id='A' AND collection_id='batch-forged-lease'"
+                ).fetchone()[0],0)
                 # The real scoped transaction must roll back if the final
                 # operation fence rejects the commit, even with a live lease.
                 with self.assertRaisesRegex(pg.PersistenceError,'workspace_lease_lost'):
