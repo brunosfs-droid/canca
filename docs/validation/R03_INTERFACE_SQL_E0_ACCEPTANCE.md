@@ -35,3 +35,19 @@ Writer `persistence/P01_Interface_SQL_Writer.py`, migração opt-in 0011, `P01_W
 
 ## Decisão de release
 **Bloquear merge** enquanto qualquer job estiver falho, em execução ou não executado, ou enquanto a evidência operacional E0 não estiver registrada e revisada. A suíte CI usa evidências de inventário simuladas em pontos controlados; não comprova sozinha importação EVE-NG real nem restauração operacional.
+
+## Matriz de evidências automatizadas (referência de testes)
+
+| Critério | Evidência no repositório |
+| --- | --- |
+| Lease ativo e escrita real; replay | `test_live_lease_authorizes_actual_writer_and_idempotent_replay` |
+| Fence no commit, rollback e retry | Mesmo teste, lote `batch-fenced` |
+| Encerramento e recuperação do lease | Mesmo teste, lotes `batch-after-stop` e `batch-stale-generation` |
+| Troca de workspace | Mesmo teste, lote `batch-after-switch` |
+| Revogação/restauração de permissão | `test_revoked_write_grant_blocks_real_writer_with_active_lease` |
+| Grant read-only e grant em outro workspace | `test_read_only_workspace_grant_cannot_persist_interfaces` e `test_writer_grant_in_other_workspace_cannot_write_target` |
+| Append-only e RLS obrigatório | `test_interface_writer_role_cannot_update_or_delete_history` e `test_interface_history_table_enforces_rls_and_has_no_mutation_policies` |
+| Chave primária e histórico temporal | `test_interface_history_primary_key_scopes_batch_and_observation` e `test_idempotent_replay_preserves_original_observed_at` |
+| Falha e recuperação SQL | `test_sql_constraint_abort_leaves_connection_reusable_for_next_batch` |
+
+**Critério de aprovação:** consultar cada nome no log do `PostgreSQL CI` na versão 16 e 17. O nome no código não representa aprovação até que a execução no SHA de release seja confirmada. A etapa E0 com evidência real permanece separada.
