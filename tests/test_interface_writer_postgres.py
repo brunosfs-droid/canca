@@ -285,6 +285,20 @@ class InterfaceWriterSQLTests(unittest.TestCase):
                     actor,'A',token,Path('.'),Path('.'),'batch-live')
                 replay=writer.persist_verified_interfaces(
                     actor,'A',token,Path('.'),Path('.'),'batch-live')
+                # The real scoped transaction must roll back if the final
+                # operation fence rejects the commit, even with a live lease.
+                with self.assertRaisesRegex(pg.PersistenceError,'workspace_lease_lost'):
+                    writer.persist_verified_interfaces(
+                        actor,'A',token,Path('.'),Path('.'),'batch-fenced',
+                        before_commit=lambda: (_ for _ in ()).throw(
+                            pg.PersistenceError('workspace_lease_lost')))
+                self.assertEqual(self.conn.execute(
+                    "SELECT count(*) FROM canca.workspace_interface_observations "
+                    "WHERE workspace_id='A' AND collection_id='batch-fenced'"
+                ).fetchone()[0],0)
+                recovered=writer.persist_verified_interfaces(
+                    actor,'A',token,Path('.'),Path('.'),'batch-fenced')
+                self.assertEqual(recovered['inserted_count'],1)
             self.assertEqual((first['inserted_count'],replay['inserted_count']),(1,0))
             self.assertEqual(self.conn.execute(
                 "SELECT count(*) FROM canca.workspace_interface_observations "
