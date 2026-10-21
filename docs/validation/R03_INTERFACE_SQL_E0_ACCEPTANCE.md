@@ -95,3 +95,15 @@ Preencher durante a execução, sem publicar segredos ou dados identificáveis:
 | Desvios, responsável pela correção, decisão | PENDENTE |
 
 **Não interpretar este modelo como execução realizada.** As evidências operacionais continuam pendentes.
+
+## Pré-validação automatizada E0 em banco descartável
+
+O repositório fornece `docs/validation/R03_E0_PREFLIGHT.sh` para executar os testes de integração R03 com PostgreSQL local, sem imprimir credenciais, nomes do banco ou dados corporativos:
+
+```bash
+# Somente no clone do repositório e com PostgreSQL LAB isolado,
+# usando as variáveis PGHOST, PGDATABASE e PGUSER já configuradas.
+CANCA_E0_DISPOSABLE_DB=YES bash docs/validation/R03_E0_PREFLIGHT.sh
+```
+
+**AVISO: A suíte remove e recria o schema `canca`.** O runner bloqueia a execução sem confirmação explícita `CANCA_E0_DISPOSABLE_DB=YES`; jamais utilizar em banco compartilhado, staging ou produção. Essa pré-validação não substitui testes com bundle verificado do EVE-NG nem backup/restore E0.
