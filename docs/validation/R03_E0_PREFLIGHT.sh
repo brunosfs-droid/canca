@@ -20,10 +20,12 @@ if [[ "${PGDATABASE}" == "postgres" || "${PGDATABASE}" == "template0" || "${PGDA
   echo "BLOCKED: PostgreSQL maintenance database cannot be used for E0." >&2
   exit 2
 fi
-if [[ -n "${PGSERVICE:-}" ]]; then
-  echo "BLOCKED: PGSERVICE must be unset" >&2
-  exit 2
-fi
+for name in PGSERVICE PGSERVICEFILE PGHOSTADDR PGOPTIONS PGDATABASE_URI; do
+  if [[ -n "${!name:-}" ]]; then
+    echo "BLOCKED: $name must be unset for E0 preflight" >&2
+    exit 2
+  fi
+done
 if [[ ! -f persistence/P01_PostgreSQL.py || ! -f tests/test_interface_writer_postgres.py ]]; then
   echo "BLOCKED: run from repository root" >&2
   exit 2
