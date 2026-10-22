@@ -12,6 +12,14 @@ for name in PGHOST PGDATABASE PGUSER; do
     exit 2
   fi
 done
+if [[ -z "${CANCA_E0_EXPECTED_DB:-}" || "${PGDATABASE}" != "${CANCA_E0_EXPECTED_DB}" ]]; then
+  echo "BLOCKED: set CANCA_E0_EXPECTED_DB to the exact disposable PGDATABASE name." >&2
+  exit 2
+fi
+if [[ "${PGDATABASE}" == "postgres" || "${PGDATABASE}" == "template0" || "${PGDATABASE}" == "template1" ]]; then
+  echo "BLOCKED: PostgreSQL maintenance database cannot be used for E0." >&2
+  exit 2
+fi
 if [[ -n "${PGSERVICE:-}" ]]; then
   echo "BLOCKED: PGSERVICE must be unset" >&2
   exit 2
