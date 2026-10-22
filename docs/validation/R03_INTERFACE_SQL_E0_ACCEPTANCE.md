@@ -103,7 +103,8 @@ O repositório fornece `docs/validation/R03_E0_PREFLIGHT.sh` para executar os te
 ```bash
 # Somente no clone do repositório e com PostgreSQL LAB isolado,
 # usando as variáveis PGHOST, PGDATABASE e PGUSER já configuradas.
-CANCA_E0_DISPOSABLE_DB=YES bash docs/validation/R03_E0_PREFLIGHT.sh
+CANCA_E0_EXPECTED_DB="$PGDATABASE" CANCA_E0_DISPOSABLE_DB=YES \
+  bash docs/validation/R03_E0_PREFLIGHT.sh
 ```
 
 **AVISO: A suíte remove e recria o schema `canca`.** O runner bloqueia a execução sem confirmação explícita `CANCA_E0_DISPOSABLE_DB=YES`; jamais utilizar em banco compartilhado, staging ou produção. Essa pré-validação não substitui testes com bundle verificado do EVE-NG nem backup/restore E0.
