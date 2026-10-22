@@ -54,6 +54,14 @@ jobs:
             echo "R03 preflight ran without mandatory PostgreSQL connection settings" >&2
             exit 1
           fi
+          if env CANCA_E0_DISPOSABLE_DB=YES CANCA_E0_EXPECTED_DB=wrong_db bash docs/validation/R03_E0_PREFLIGHT.sh; then
+            echo "R03 preflight accepted mismatched expected database" >&2
+            exit 1
+          fi
+          if env CANCA_E0_DISPOSABLE_DB=YES CANCA_E0_EXPECTED_DB=postgres PGDATABASE=postgres bash docs/validation/R03_E0_PREFLIGHT.sh; then
+            echo "R03 preflight accepted maintenance database" >&2
+            exit 1
+          fi
           if env PGSERVICE=untrusted CANCA_E0_DISPOSABLE_DB=YES bash docs/validation/R03_E0_PREFLIGHT.sh; then
             echo "R03 preflight accepted unsupported PGSERVICE configuration" >&2
             exit 1
