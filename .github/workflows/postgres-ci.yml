@@ -110,7 +110,10 @@ jobs:
           CANCA_E0_EXPECTED_DB: canca_ci
           CANCA_E0_LAB_ID: deliberately-wrong-identity
         run: |
+          # A rejected preflight must neither alter the canca schema nor its
+          # existing table inventory, even if the schema already exists.
           before="$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT coalesce(string_agg(nspname, ',' ORDER BY nspname), '') FROM pg_namespace WHERE nspname='canca'")"
+          before_tables="$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT coalesce(string_agg(tablename, ',' ORDER BY tablename), '') FROM pg_tables WHERE schemaname='canca'")"
           if bash docs/validation/R03_E0_PREFLIGHT.sh > /tmp/r03-sentinel-check.log 2>&1; then
             echo "R03 preflight accepted incorrect database sentinel" >&2
             exit 1
@@ -123,6 +126,8 @@ jobs:
           grep -q "BLOCKED: disposable lab identity does not match" /tmp/r03-sentinel-check.log
           after="$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT coalesce(string_agg(nspname, ',' ORDER BY nspname), '') FROM pg_namespace WHERE nspname='canca'")"
           test "$before" = "$after" || { echo "R03 rejected sentinel changed the canca schema" >&2; exit 1; }
+          after_tables="$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT coalesce(string_agg(tablename, ',' ORDER BY tablename), '') FROM pg_tables WHERE schemaname='canca'")"
+          test "$before_tables" = "$after_tables" || { echo "R03 rejected sentinel changed canca table inventory" >&2; exit 1; }
       - name: Qualify R03 through guarded E0 preflight on real PostgreSQL
         env:
           CANCA_E0_DISPOSABLE_DB: "YES"
