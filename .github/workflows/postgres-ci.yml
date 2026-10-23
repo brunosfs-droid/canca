@@ -95,6 +95,8 @@ jobs:
           CANCA_E0_DISPOSABLE_DB: "YES"
           CANCA_E0_EXPECTED_DB: canca_ci
         run: bash docs/validation/R03_E0_PREFLIGHT.sh
+      - name: Qualify database and evidence store backup restore
+        run: python tests/postgres_backup_restore_smoke.py --postgres-container "${{ job.services.postgres.id }}"
       - name: Record R03 automated preflight evidence
         env:
           MATRIX_POSTGRES: ${{ matrix.postgres }}
@@ -126,5 +128,3 @@ jobs:
           path: r03-ci-evidence/result.json
           if-no-files-found: error
           retention-days: 14
-      - name: Qualify database and evidence store backup restore
-        run: python tests/postgres_backup_restore_smoke.py --postgres-container "${{ job.services.postgres.id }}"
