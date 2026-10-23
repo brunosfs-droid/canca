@@ -17,6 +17,8 @@ def main():
     args = parser.parse_args()
     root = args.bundle.resolve(strict=True)
     out = args.output.resolve()
+    if root.is_dir() and out.is_relative_to(root):
+        parser.error("output must be outside the evidence bundle directory")
     if not root.is_file() and not root.is_dir():
         parser.error("bundle must be a regular file or directory")
     paths = [root] if root.is_file() else sorted(root.rglob("*"))
