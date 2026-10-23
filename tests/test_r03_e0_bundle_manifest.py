@@ -44,5 +44,25 @@ class R03BundleManifestTests(unittest.TestCase):
             (source / "linked.txt").symlink_to(source / "file.txt")
             self.assertNotEqual(self.run_manifest(source, root / "manifest.json").returncode, 0)
 
+    def test_verify_manifest_detects_tampering(self):
+        verifier = SCRIPT.parent / "R03_E0_VERIFY_MANIFEST.py"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "bundle"
+            source.mkdir()
+            evidence = source / "sample.json"
+            evidence.write_bytes(b'{"interfaces":[]}')
+            manifest = root / "manifest.json"
+            self.assertEqual(self.run_manifest(source, manifest).returncode, 0)
+            def verify():
+                return subprocess.run([sys.executable, str(verifier), "--bundle",
+                    str(source), "--manifest", str(manifest)], capture_output=True, text=True)
+            self.assertEqual(verify().returncode, 0)
+            evidence.write_bytes(b'{"interfaces":[1]}')
+            self.assertNotEqual(verify().returncode, 0)
+            evidence.write_bytes(b'{"interfaces":[]}')
+            (source / "additional.json").write_text("{}")
+            self.assertNotEqual(verify().returncode, 0)
+
 if __name__ == "__main__":
     unittest.main()
