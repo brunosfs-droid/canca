@@ -64,5 +64,21 @@ class R03BundleManifestTests(unittest.TestCase):
             (source / "additional.json").write_text("{}")
             self.assertNotEqual(verify().returncode, 0)
 
+    def test_verifier_rejects_symlinked_bundle_root(self):
+        verifier = SCRIPT.parent / "R03_E0_VERIFY_MANIFEST.py"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            source.mkdir()
+            (source / "evidence.txt").write_bytes(b"evidence")
+            manifest = root / "manifest.json"
+            self.assertEqual(self.run_manifest(source, manifest).returncode, 0)
+            alias = root / "alias"
+            alias.symlink_to(source, target_is_directory=True)
+            result = subprocess.run([sys.executable, str(verifier), "--bundle",
+                str(alias), "--manifest", str(manifest)], capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("symbolic link", result.stderr)
+
 if __name__ == "__main__":
     unittest.main()
