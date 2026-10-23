@@ -108,3 +108,12 @@ CANCA_E0_EXPECTED_DB="$PGDATABASE" CANCA_E0_DISPOSABLE_DB=YES \
 ```
 
 **AVISO: A suíte remove e recria o schema `canca`.** O runner bloqueia a execução sem confirmação explícita `CANCA_E0_DISPOSABLE_DB=YES`; jamais utilizar em banco compartilhado, staging ou produção. Essa pré-validação não substitui testes com bundle verificado do EVE-NG nem backup/restore E0.
+
+## Execução do preflight com artefatos — SHA 2509981
+
+- Commit: `25099817905d2e2e0da281db6ae48e6d4e182998`.
+- PostgreSQL CI run: `39883743859`, conclusão **success**.
+- PostgreSQL 16: job `metadata-transactions (16)`, preflight, geração/upload de evidência e smoke backup/restore **success**; artefato `r03-preflight-postgres-16` (ID `12471841606`).
+- PostgreSQL 17: job `metadata-transactions (17)`, preflight, geração/upload de evidência e smoke backup/restore **success**; artefato `r03-preflight-postgres-17` (ID `12471662189`).
+- Ambos os artefatos estavam disponíveis e não expirados no momento da consulta; retenção configurada em 14 dias.
+- **Escopo:** banco descartável de CI. Estes arquivos não demonstram execução operacional E0 com bundle EVE-NG nem recuperação e restore no ambiente alvo. A aprovação requer evidências operacionais separadas.
