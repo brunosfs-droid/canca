@@ -117,3 +117,13 @@ CANCA_E0_EXPECTED_DB="$PGDATABASE" CANCA_E0_DISPOSABLE_DB=YES \
 - PostgreSQL 17: job `metadata-transactions (17)`, preflight, geração/upload de evidência e smoke backup/restore **success**; artefato `r03-preflight-postgres-17` (ID `12471662189`).
 - Ambos os artefatos estavam disponíveis e não expirados no momento da consulta; retenção configurada em 14 dias.
 - **Escopo:** banco descartável de CI. Estes arquivos não demonstram execução operacional E0 com bundle EVE-NG nem recuperação e restore no ambiente alvo. A aprovação requer evidências operacionais separadas.
+
+## Gate automatizado validado — SHA 1bd9c2c
+
+- Commit: `1bd9c2c0735ac8f27877026accdc6f0c8c76e2e5`.
+- Oito workflows `success`, incluindo PostgreSQL CI run `39887502675`.
+- PostgreSQL 16: job `metadata-transactions (16)` success; artefato `r03-preflight-postgres-16`, ID `12473217788`.
+- PostgreSQL 17: job `metadata-transactions (17)` success; artefato `r03-preflight-postgres-17`, ID `12472814101`.
+- Nos dois jobs, a sequência `preflight → backup/restore → geração/upload de evidência` consta como **success**.
+- Artefatos confirmados não expirados na consulta, com retenção de 14 dias.
+- **Ainda não representa E0 aprovado:** bundle EVE-NG real, execução no ambiente alvo, recuperação operacional e aprovação final continuam pendentes.
