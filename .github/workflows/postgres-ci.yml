@@ -98,10 +98,17 @@ jobs:
         run: python -m py_compile server/P01_Operator_Audit_Check.py tests/test_postgres_operator_audit.py
       - name: Validate metadata transactions on real PostgreSQL
         run: python -m unittest discover -s tests -p "test_postgres*.py" -v
+      - name: Provision disposable R03 E0 database identity
+        env:
+          CANCA_E0_LAB_ID: github-actions-r03-disposable
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS public.canca_e0_lab_identity (name text PRIMARY KEY, value text NOT NULL)"
+          psql -X -v ON_ERROR_STOP=1 -c "INSERT INTO public.canca_e0_lab_identity (name,value) VALUES ('disposable_lab_id','github-actions-r03-disposable') ON CONFLICT (name) DO UPDATE SET value=EXCLUDED.value"
       - name: Qualify R03 through guarded E0 preflight on real PostgreSQL
         env:
           CANCA_E0_DISPOSABLE_DB: "YES"
           CANCA_E0_EXPECTED_DB: canca_ci
+          CANCA_E0_LAB_ID: github-actions-r03-disposable
         run: bash docs/validation/R03_E0_PREFLIGHT.sh
       - name: Qualify database and evidence store backup restore
         run: python tests/postgres_backup_restore_smoke.py --postgres-container "${{ job.services.postgres.id }}"
