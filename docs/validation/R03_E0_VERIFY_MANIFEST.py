@@ -11,6 +11,8 @@ def main():
     parser.add_argument("--bundle", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
     args = parser.parse_args()
+    if args.bundle.is_symlink():
+        parser.error("bundle root must not be a symbolic link")
     root = args.bundle.resolve(strict=True)
     if not root.is_file() and not root.is_dir():
         parser.error("bundle must be a regular file or directory")
