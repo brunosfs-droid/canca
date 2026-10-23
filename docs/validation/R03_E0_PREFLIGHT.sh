@@ -39,6 +39,22 @@ if [[ ! -f persistence/P01_PostgreSQL.py || ! -f tests/test_interface_writer_pos
   exit 2
 fi
 
+# Require a deliberately provisioned CI/lab database sentinel before the
+# destructive integration suite. A DB name and loopback address alone are
+# insufficient: the operator must create the marker in that exact database.
+if ! command -v psql >/dev/null 2>&1; then
+  echo "BLOCKED: psql client required for database identity precheck" >&2
+  exit 2
+fi
+if ! identity="$(psql -X -w -v ON_ERROR_STOP=1 -Atqc "SELECT value FROM public.canca_e0_lab_identity WHERE name='disposable_lab_id'" 2>/dev/null)"; then
+  echo "BLOCKED: disposable lab identity sentinel missing or database unavailable" >&2
+  exit 2
+fi
+if [[ -z "${CANCA_E0_LAB_ID:-}" || "${identity}" != "${CANCA_E0_LAB_ID}" ]]; then
+  echo "BLOCKED: disposable lab identity does not match CANCA_E0_LAB_ID" >&2
+  exit 2
+fi
+
 # The integration suite drops/recreates canca schema in setUp.
 # Never point this at a shared, staging, or production database.
 sha="$(git rev-parse HEAD)"
