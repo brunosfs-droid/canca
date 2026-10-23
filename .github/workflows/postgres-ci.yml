@@ -116,7 +116,7 @@ jobs:
               "operational_e0": "pending",
           }
           Path("r03-ci-evidence/result.json").write_text(
-              json.dumps(evidence, indent=2, sort_keys=True) + "\\n", encoding="utf-8"
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8"
           )
           PY
       - name: Upload R03 automated preflight evidence
