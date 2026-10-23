@@ -43,6 +43,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - name: Validate R03 E0 bundle manifest integrity
+        run: python -m unittest discover -s tests -p "test_r03_e0_bundle_manifest.py" -v
       - name: Validate R03 E0 preflight safety guard
         run: |
           bash -n docs/validation/R03_E0_PREFLIGHT.sh
