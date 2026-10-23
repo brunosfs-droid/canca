@@ -142,3 +142,15 @@ VALUES ('disposable_lab_id', 'IDENTIFICADOR-ALEATORIO-DO-LAB');
 ```
 
 Na execução, exportar `CANCA_E0_LAB_ID=IDENTIFICADOR-ALEATORIO-DO-LAB`. O CI cria a sentinela no próprio job com ID sintético. O comando requer `psql` instalado. **Não criar esta sentinela em produção.** O identificador é uma confirmação operacional, não segredo nem proteção contra administrador malicioso.
+
+## Inventário verificável do bundle EVE-NG (sem acesso ao banco)
+
+Antes da importação operacional, gerar um manifesto SHA-256 dos arquivos **reais** do bundle, sem publicar os próprios arquivos:
+
+```bash
+python docs/validation/R03_E0_BUNDLE_MANIFEST.py \
+  --bundle /caminho/do/bundle-eve-ng \
+  --output /caminho/seguro/r03-bundle-manifest.json
+```
+
+O script `R03_E0_BUNDLE_MANIFEST.py` lê o bundle em modo somente leitura, rejeita links simbólicos, recusa sobrescrever uma evidência existente, calcula hashes por arquivo e produz um JSON. O manifesto **não aprova E0**, não comprova validade semântica das coletas e **não realiza importação nem restauração**. Antes de anexar o manifesto a PRs públicos, revisar os nomes dos arquivos e remover qualquer informação interna ou identificável. Preservar logs e arquivos completos exclusivamente em armazenamento autorizado.
