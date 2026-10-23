@@ -62,6 +62,14 @@ jobs:
             echo "R03 preflight accepted maintenance database" >&2
             exit 1
           fi
+          if env PGHOST=example.invalid CANCA_E0_DISPOSABLE_DB=YES CANCA_E0_EXPECTED_DB="$PGDATABASE" bash docs/validation/R03_E0_PREFLIGHT.sh; then
+            echo "R03 preflight accepted non-loopback PGHOST" >&2
+            exit 1
+          fi
+          if env PGPORT=15432 CANCA_E0_DISPOSABLE_DB=YES CANCA_E0_EXPECTED_DB="$PGDATABASE" bash docs/validation/R03_E0_PREFLIGHT.sh; then
+            echo "R03 preflight accepted unexpected PostgreSQL port" >&2
+            exit 1
+          fi
           for override in PGHOSTADDR PGOPTIONS PGSERVICEFILE; do
             if env "$override=untrusted" CANCA_E0_DISPOSABLE_DB=YES CANCA_E0_EXPECTED_DB="$PGDATABASE" bash docs/validation/R03_E0_PREFLIGHT.sh; then
               echo "R03 preflight accepted unexpected $override" >&2
