@@ -127,3 +127,18 @@ CANCA_E0_EXPECTED_DB="$PGDATABASE" CANCA_E0_DISPOSABLE_DB=YES \
 - Nos dois jobs, a sequência `preflight → backup/restore → geração/upload de evidência` consta como **success**.
 - Artefatos confirmados não expirados na consulta, com retenção de 14 dias.
 - **Ainda não representa E0 aprovado:** bundle EVE-NG real, execução no ambiente alvo, recuperação operacional e aprovação final continuam pendentes.
+
+## Identidade obrigatória do banco de laboratório
+
+O preflight agora consulta `public.canca_e0_lab_identity` e exige que o valor `disposable_lab_id` coincida com `CANCA_E0_LAB_ID`. A simples confirmação de que o banco é descartável e o uso de loopback **não bastam**. Provisionar a sentinela **somente** em banco isolado, criado para destruição, após verificação pelo operador:
+
+```sql
+CREATE TABLE public.canca_e0_lab_identity (
+  name text PRIMARY KEY,
+  value text NOT NULL
+);
+INSERT INTO public.canca_e0_lab_identity (name, value)
+VALUES ('disposable_lab_id', 'IDENTIFICADOR-ALEATORIO-DO-LAB');
+```
+
+Na execução, exportar `CANCA_E0_LAB_ID=IDENTIFICADOR-ALEATORIO-DO-LAB`. O CI cria a sentinela no próprio job com ID sintético. O comando requer `psql` instalado. **Não criar esta sentinela em produção.** O identificador é uma confirmação operacional, não segredo nem proteção contra administrador malicioso.
