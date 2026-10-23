@@ -12,6 +12,14 @@ for name in PGHOST PGDATABASE PGUSER; do
     exit 2
   fi
 done
+if [[ "${PGHOST}" != "127.0.0.1" && "${PGHOST}" != "localhost" ]]; then
+  echo "BLOCKED: E0 preflight requires PGHOST=127.0.0.1 or localhost." >&2
+  exit 2
+fi
+if [[ "${PGPORT:-5432}" != "5432" ]]; then
+  echo "BLOCKED: E0 preflight requires standard local PostgreSQL port 5432." >&2
+  exit 2
+fi
 if [[ -z "${CANCA_E0_EXPECTED_DB:-}" || "${PGDATABASE}" != "${CANCA_E0_EXPECTED_DB}" ]]; then
   echo "BLOCKED: set CANCA_E0_EXPECTED_DB to the exact disposable PGDATABASE name." >&2
   exit 2
