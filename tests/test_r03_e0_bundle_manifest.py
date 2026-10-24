@@ -80,5 +80,36 @@ class R03BundleManifestTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("symbolic link", result.stderr)
 
+    def test_generator_rejects_symlinked_bundle_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            source.mkdir()
+            (source / "evidence.txt").write_bytes(b"evidence")
+            alias = root / "alias"
+            alias.symlink_to(source, target_is_directory=True)
+            result = self.run_manifest(alias, root / "manifest.json")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("symbolic link", result.stderr)
+
+    def test_generator_and_verifier_reject_symlinked_child_directory(self):
+        verifier = SCRIPT.parent / "R03_E0_VERIFY_MANIFEST.py"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            source.mkdir()
+            external = root / "external"
+            external.mkdir()
+            (external / "private.txt").write_bytes(b"not part of bundle")
+            (source / "evidence.txt").write_bytes(b"evidence")
+            manifest = root / "manifest.json"
+            self.assertEqual(self.run_manifest(source, manifest).returncode, 0)
+            (source / "linked-directory").symlink_to(external, target_is_directory=True)
+            self.assertNotEqual(self.run_manifest(source, root / "second.json").returncode, 0)
+            result = subprocess.run([sys.executable, str(verifier), "--bundle",
+                str(source), "--manifest", str(manifest)], capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("symlink", result.stderr)
+
 if __name__ == "__main__":
     unittest.main()
