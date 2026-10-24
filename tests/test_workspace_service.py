@@ -177,6 +177,86 @@ class RegisteredOperationTests(unittest.TestCase):
                 adapter.persisted_interface_ip_history('reader',token,limit=10)
             read.assert_not_called()
 
+    def test_interface_sql_writer_rejects_collection_not_matching_bundle(self):
+        token=self.opened()
+        adapter=self.adapter()
+        with patch.object(adapter.sources,'prepare') as prepare,patch(
+                'P01_Interface_SQL_Writer.persist_verified_interfaces') as writer:
+            with self.assertRaisesRegex(pg.PersistenceError,'model_import_conflict'):
+                adapter.persist_verified_interface_inventory(
+                    'writer',token,'LAB-001','bnd-'+'a'*20,'other-collection')
+            prepare.assert_not_called()
+            writer.assert_not_called()
+
+    def test_interface_sql_writer_requires_write_and_releases_coordinator_job(self):
+        token=self.opened()
+        adapter=self.adapter()
+        with tempfile.TemporaryDirectory() as root:
+            with patch.dict(adapter.sources._roots,{'A':Path(root)}),patch.object(
+                    adapter.sources,'prepare',return_value={}),patch(
+                    'P01_Interface_SQL_Writer.persist_verified_interfaces',
+                    return_value={'status':'persisted','observation_count':1}) as persist:
+                with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
+                    adapter.persist_verified_interface_inventory(
+                        'reader',token,'LAB-001','bnd-'+'a'*20,'bnd-'+'a'*20)
+                persist.assert_not_called()
+                result=adapter.persist_verified_interface_inventory(
+                    'writer',token,'LAB-001','bnd-'+'a'*20,'bnd-'+'a'*20)
+                self.assertEqual(result['status'],'persisted')
+                persist.assert_called_once()
+                self.assertEqual(persist.call_args.args[1:3],('A',token))
+                self.assertFalse(self.c._jobs)
+
+    def test_interface_sql_writer_detects_revocation_before_response(self):
+        token=self.opened()
+        adapter=self.adapter()
+        with tempfile.TemporaryDirectory() as root:
+            def revoke_after_write(*args,**kwargs):
+                self.grants['writer'].discard(('A','workspace:write'))
+                return {'status':'persisted','observation_count':1}
+            with patch.dict(adapter.sources._roots,{'A':Path(root)}),patch.object(
+                    adapter.sources,'prepare',return_value={}),patch(
+                    'P01_Interface_SQL_Writer.persist_verified_interfaces',
+                    side_effect=revoke_after_write) as persist:
+                with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
+                    adapter.persist_verified_interface_inventory(
+                        'writer',token,'LAB-001','bnd-'+'a'*20,'bnd-'+'a'*20)
+                persist.assert_called_once()
+                self.assertFalse(self.c._jobs)
+
+    def test_interface_writer_commit_callback_uses_real_coordinator_authorization(self):
+        token=self.opened()
+        adapter=self.adapter()
+        with tempfile.TemporaryDirectory() as root:
+            def invoke_commit_fence(*args,**kwargs):
+                fence=kwargs['before_commit']
+                fence()
+                self.grants['writer'].discard(('A','workspace:write'))
+                fence()
+                return {'status':'persisted'}
+            with patch.dict(adapter.sources._roots,{'A':Path(root)}),patch.object(
+                    adapter.sources,'prepare',return_value={}),patch(
+                    'P01_Interface_SQL_Writer.persist_verified_interfaces',
+                    side_effect=invoke_commit_fence) as persist:
+                with self.assertRaisesRegex(pg.PersistenceError,'workspace_access_denied'):
+                    adapter.persist_verified_interface_inventory(
+                        'writer',token,'LAB-001','bnd-'+'a'*20,'bnd-'+'a'*20)
+                persist.assert_called_once()
+                self.assertFalse(self.c._jobs)
+
+    def test_interface_sql_writer_denies_stale_lease_before_source_access(self):
+        token=self.opened()
+        adapter=self.adapter()
+        self.c.close('writer','A',token.generation,timeout=0)
+        self.opened('B')
+        with patch.object(adapter.sources,'prepare') as source,patch(
+                'P01_Interface_SQL_Writer.persist_verified_interfaces') as writer:
+            with self.assertRaisesRegex(pg.PersistenceError,'workspace_generation_stale'):
+                adapter.persist_verified_interface_inventory(
+                    'writer',token,'LAB-001','bnd-'+'a'*20,'bnd-'+'a'*20)
+            source.assert_not_called()
+            writer.assert_not_called()
+
     def test_verified_interface_inventory_denies_stale_generation_before_read(self):
         token=self.opened()
         adapter=self.adapter()

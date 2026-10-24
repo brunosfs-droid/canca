@@ -150,6 +150,24 @@ class WorkspaceService:
                         revision=evidence['revision'],prefix_length=prefix_length,
                         candidates=candidates)
 
+    def persist_verified_interface_inventory(self,actor,token,assessment_id,bundle_id,
+                                             collection_id,*,limit=100):
+        """Persist verified imported interface evidence with a live write lease."""
+        import P01_Interface_SQL_Writer as writer
+        pg.require(collection_id==bundle_id,'model_import_conflict')
+        with self.coordinator.borrow(actor,token,'workspace:write') as operation:
+            operation.check()
+            self.sources.prepare(token.workspace_id,assessment_id,bundle_id)
+            operation.check()
+            root=self.sources._roots.get(token.workspace_id)
+            pg.require(root is not None,'workspace_access_denied')
+            directory=root/'assessments'/assessment_id/'imports'/bundle_id
+            result=writer.persist_verified_interfaces(
+                actor,token.workspace_id,token,root,directory,collection_id,
+                limit=limit,before_commit=operation.check)
+            operation.check()
+            return dict(result,generation=token.generation,bundle_id=bundle_id)
+
     def verified_interface_inventory(self,actor,token,assessment_id,bundle_id,*,limit=100):
         """Workspace-fenced inventory from a trusted imported bundle."""
         import P01_Verified_Interface_Inventory as inventory

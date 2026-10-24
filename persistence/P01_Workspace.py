@@ -48,7 +48,12 @@ def page_args(after, limit):
 
 
 def schema(conn):
-    pg.schema_check(conn, minimum=5, intents=True)
+    try:
+        pg.schema_check(conn, minimum=5, intents=True)
+    except pg.PersistenceError as exc:
+        if str(exc) != 'schema_mismatch':
+            raise
+        pg.schema_check(conn, minimum=11, interfaces=True)
 
 
 def admin(conn):

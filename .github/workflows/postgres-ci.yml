@@ -17,7 +17,7 @@ jobs:
         postgres: ["16", "17"]
     services:
       postgres:
-        image: public.ecr.aws/docker/library/postgres:${{ matrix.postgres }}
+        image: postgres:${{ matrix.postgres }}
         env:
           POSTGRES_DB: canca_ci
           POSTGRES_USER: canca_ci
@@ -43,6 +43,45 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - name: Validate R03 E0 bundle manifest integrity
+        run: python -m unittest discover -s tests -p "test_r03_e0_bundle_manifest.py" -v
+      - name: Validate R03 E0 preflight safety guard
+        run: |
+          bash -n docs/validation/R03_E0_PREFLIGHT.sh
+          if CANCA_E0_DISPOSABLE_DB=NO bash docs/validation/R03_E0_PREFLIGHT.sh; then
+            echo "R03 preflight ran without disposable database confirmation" >&2
+            exit 1
+          fi
+          if env -u PGHOST -u PGDATABASE -u PGUSER CANCA_E0_DISPOSABLE_DB=YES bash docs/validation/R03_E0_PREFLIGHT.sh; then
+            echo "R03 preflight ran without mandatory PostgreSQL connection settings" >&2
+            exit 1
+          fi
+          if env CANCA_E0_DISPOSABLE_DB=YES CANCA_E0_EXPECTED_DB=wrong_db bash docs/validation/R03_E0_PREFLIGHT.sh; then
+            echo "R03 preflight accepted mismatched expected database" >&2
+            exit 1
+          fi
+          if env CANCA_E0_DISPOSABLE_DB=YES CANCA_E0_EXPECTED_DB=postgres PGDATABASE=postgres bash docs/validation/R03_E0_PREFLIGHT.sh; then
+            echo "R03 preflight accepted maintenance database" >&2
+            exit 1
+          fi
+          if env PGHOST=example.invalid CANCA_E0_DISPOSABLE_DB=YES CANCA_E0_EXPECTED_DB="$PGDATABASE" bash docs/validation/R03_E0_PREFLIGHT.sh; then
+            echo "R03 preflight accepted non-loopback PGHOST" >&2
+            exit 1
+          fi
+          if env PGPORT=15432 CANCA_E0_DISPOSABLE_DB=YES CANCA_E0_EXPECTED_DB="$PGDATABASE" bash docs/validation/R03_E0_PREFLIGHT.sh; then
+            echo "R03 preflight accepted unexpected PostgreSQL port" >&2
+            exit 1
+          fi
+          for override in PGHOSTADDR PGOPTIONS PGSERVICEFILE; do
+            if env "$override=untrusted" CANCA_E0_DISPOSABLE_DB=YES CANCA_E0_EXPECTED_DB="$PGDATABASE" bash docs/validation/R03_E0_PREFLIGHT.sh; then
+              echo "R03 preflight accepted unexpected $override" >&2
+              exit 1
+            fi
+          done
+          if env PGSERVICE=untrusted CANCA_E0_DISPOSABLE_DB=YES CANCA_E0_EXPECTED_DB="$PGDATABASE" bash docs/validation/R03_E0_PREFLIGHT.sh; then
+            echo "R03 preflight accepted unsupported PGSERVICE configuration" >&2
+            exit 1
+          fi
       - name: Install optional PostgreSQL driver
         run: python -m pip install -r persistence/requirements-postgres.txt
       - name: Compile persistence
@@ -61,5 +100,75 @@ jobs:
         run: python -m py_compile server/P01_Operator_Audit_Check.py tests/test_postgres_operator_audit.py
       - name: Validate metadata transactions on real PostgreSQL
         run: python -m unittest discover -s tests -p "test_postgres*.py" -v
+      - name: Provision disposable R03 E0 database identity
+        env:
+          CANCA_E0_LAB_ID: github-actions-r03-disposable
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS public.canca_e0_lab_identity (name text PRIMARY KEY, value text NOT NULL)"
+          psql -X -v ON_ERROR_STOP=1 -c "INSERT INTO public.canca_e0_lab_identity (name,value) VALUES ('disposable_lab_id','github-actions-r03-disposable') ON CONFLICT (name) DO UPDATE SET value=EXCLUDED.value"
+      - name: Verify R03 E0 rejects incorrect or missing database sentinel
+        env:
+          CANCA_E0_DISPOSABLE_DB: "YES"
+          CANCA_E0_EXPECTED_DB: canca_ci
+          CANCA_E0_LAB_ID: deliberately-wrong-identity
+        run: |
+          # A rejected preflight must neither alter the canca schema nor its
+          # existing table inventory, even if the schema already exists.
+          before="$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT coalesce(string_agg(nspname, ',' ORDER BY nspname), '') FROM pg_namespace WHERE nspname='canca'")"
+          before_tables="$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT coalesce(string_agg(tablename, ',' ORDER BY tablename), '') FROM pg_tables WHERE schemaname='canca'")"
+          before_identity="$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT value FROM public.canca_e0_lab_identity WHERE name='disposable_lab_id'")"
+          if bash docs/validation/R03_E0_PREFLIGHT.sh > /tmp/r03-sentinel-check.log 2>&1; then
+            echo "R03 preflight accepted incorrect database sentinel" >&2
+            exit 1
+          fi
+          grep -q "BLOCKED: disposable lab identity does not match" /tmp/r03-sentinel-check.log
+          if env -u CANCA_E0_LAB_ID bash docs/validation/R03_E0_PREFLIGHT.sh > /tmp/r03-sentinel-check.log 2>&1; then
+            echo "R03 preflight accepted missing sentinel confirmation" >&2
+            exit 1
+          fi
+          grep -q "BLOCKED: disposable lab identity does not match" /tmp/r03-sentinel-check.log
+          after="$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT coalesce(string_agg(nspname, ',' ORDER BY nspname), '') FROM pg_namespace WHERE nspname='canca'")"
+          test "$before" = "$after" || { echo "R03 rejected sentinel changed the canca schema" >&2; exit 1; }
+          after_tables="$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT coalesce(string_agg(tablename, ',' ORDER BY tablename), '') FROM pg_tables WHERE schemaname='canca'")"
+          test "$before_tables" = "$after_tables" || { echo "R03 rejected sentinel changed canca table inventory" >&2; exit 1; }
+          after_identity="$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT value FROM public.canca_e0_lab_identity WHERE name='disposable_lab_id'")"
+          test "$before_identity" = "$after_identity" || { echo "R03 rejected sentinel modified lab identity" >&2; exit 1; }
+      - name: Qualify R03 through guarded E0 preflight on real PostgreSQL
+        env:
+          CANCA_E0_DISPOSABLE_DB: "YES"
+          CANCA_E0_EXPECTED_DB: canca_ci
+          CANCA_E0_LAB_ID: github-actions-r03-disposable
+        run: bash docs/validation/R03_E0_PREFLIGHT.sh
       - name: Qualify database and evidence store backup restore
         run: python tests/postgres_backup_restore_smoke.py --postgres-container "${{ job.services.postgres.id }}"
+      - name: Record R03 automated preflight evidence
+        env:
+          MATRIX_POSTGRES: ${{ matrix.postgres }}
+        run: |
+          mkdir -p r03-ci-evidence
+          python - <<'PY'
+          import datetime
+          import json
+          import os
+          from pathlib import Path
+          evidence = {
+              "type": "canca.r03.automated_preflight.v1",
+              "status": "passed",
+              "commit_sha": os.environ["GITHUB_SHA"],
+              "workflow_run_id": os.environ["GITHUB_RUN_ID"],
+              "postgres_major": os.environ["MATRIX_POSTGRES"],
+              "recorded_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "scope": "disposable_ci_database_only",
+              "operational_e0": "pending",
+          }
+          Path("r03-ci-evidence/result.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
+      - name: Upload R03 automated preflight evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: r03-preflight-postgres-${{ matrix.postgres }}
+          path: r03-ci-evidence/result.json
+          if-no-files-found: error
+          retention-days: 14
