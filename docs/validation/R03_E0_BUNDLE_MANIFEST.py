@@ -15,6 +15,8 @@ def main():
     parser.add_argument("--bundle", type=Path, required=True, help="EVE-NG export file or evidence directory")
     parser.add_argument("--output", type=Path, required=True, help="manifest JSON output outside the bundle")
     args = parser.parse_args()
+    if args.bundle.is_symlink():
+        parser.error("bundle root must not be a symbolic link")
     root = args.bundle.resolve(strict=True)
     out = args.output.resolve()
     if root.is_dir() and out.is_relative_to(root):
