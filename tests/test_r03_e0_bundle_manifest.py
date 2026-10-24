@@ -111,5 +111,31 @@ class R03BundleManifestTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("symlink", result.stderr)
 
+    def test_verifier_rejects_removed_file_and_tampered_manifest(self):
+        verifier = SCRIPT.parent / "R03_E0_VERIFY_MANIFEST.py"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "bundle"
+            source.mkdir()
+            evidence = source / "evidence.json"
+            evidence.write_bytes(b'{"interfaces":[]}')
+            manifest = root / "manifest.json"
+            self.assertEqual(self.run_manifest(source, manifest).returncode, 0)
+            def verify():
+                return subprocess.run([sys.executable, str(verifier), "--bundle",
+                    str(source), "--manifest", str(manifest)], capture_output=True, text=True)
+            evidence.unlink()
+            self.assertNotEqual(verify().returncode, 0)
+            evidence.write_bytes(b'{"interfaces":[]}')
+            data = json.loads(manifest.read_text())
+            data["files"][0]["relative_path"] = "../outside.json"
+            manifest.write_text(json.dumps(data))
+            self.assertNotEqual(verify().returncode, 0)
+            data["files"][0]["relative_path"] = "evidence.json"
+            data["files"].append(dict(data["files"][0]))
+            data["source_file_count"] = 2
+            manifest.write_text(json.dumps(data))
+            self.assertNotEqual(verify().returncode, 0)
+
 if __name__ == "__main__":
     unittest.main()
