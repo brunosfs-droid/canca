@@ -151,7 +151,7 @@ jobs:
           CANCA_E0_LAB_ID: github-actions-r03-disposable
         run: |
           mkdir -p /tmp/canca-r03-ci-bundle
-          printf '%s\\n' '{"interfaces":[]}' > /tmp/canca-r03-ci-bundle/ci-synthetic-evidence.json
+          printf '%s\n' '{"interfaces":[]}' > /tmp/canca-r03-ci-bundle/ci-synthetic-evidence.json
           python docs/validation/R03_E0_BUNDLE_MANIFEST.py --bundle /tmp/canca-r03-ci-bundle --output /tmp/canca-r03-ci-manifest.json
           bash docs/validation/R03_E0_LAB_GATE.sh /tmp/canca-r03-ci-bundle /tmp/canca-r03-ci-manifest.json
       - name: Qualify database and evidence store backup restore
