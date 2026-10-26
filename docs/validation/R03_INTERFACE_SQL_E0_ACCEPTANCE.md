@@ -169,3 +169,7 @@ bash docs/validation/R03_E0_LAB_GATE.sh \
 ```
 
 O gate composto **verifica primeiro** os arquivos contra o manifesto SHA-256, interrompendo a execução caso haja divergências. **Somente depois** chama o preflight PostgreSQL protegido, que pode remover/recriar o schema `canca`. A validação de bytes e da suíte SQL não comprova importação real, comportamento da rede ou restauração do ambiente alvo. Esses itens e a aprovação operacional continuam no checklist E0.
+
+## Estabilidade do bundle durante o gate composto
+
+O `R03_E0_LAB_GATE.sh` confere o manifesto **antes e depois** da execução do preflight PostgreSQL. Se os bytes mudarem enquanto os testes estiverem em execução, o gate falha. A verificação final é uma medida de detecção, não uma garantia de snapshot atômico nem substitui a execução E0 de importação real, failover e restauração no laboratório.
