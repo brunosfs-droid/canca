@@ -144,12 +144,16 @@ jobs:
           test "$before_tables" = "$after_tables" || { echo "R03 rejected sentinel changed canca table inventory" >&2; exit 1; }
           after_identity="$(psql -X -v ON_ERROR_STOP=1 -Atqc "SELECT value FROM public.canca_e0_lab_identity WHERE name='disposable_lab_id'")"
           test "$before_identity" = "$after_identity" || { echo "R03 rejected sentinel modified lab identity" >&2; exit 1; }
-      - name: Qualify R03 through guarded E0 preflight on real PostgreSQL
+      - name: Qualify full R03 E0 bundle and guarded SQL gate
         env:
           CANCA_E0_DISPOSABLE_DB: "YES"
           CANCA_E0_EXPECTED_DB: canca_ci
           CANCA_E0_LAB_ID: github-actions-r03-disposable
-        run: bash docs/validation/R03_E0_PREFLIGHT.sh
+        run: |
+          mkdir -p /tmp/canca-r03-ci-bundle
+          printf '%s\\n' '{"interfaces":[]}' > /tmp/canca-r03-ci-bundle/ci-synthetic-evidence.json
+          python docs/validation/R03_E0_BUNDLE_MANIFEST.py --bundle /tmp/canca-r03-ci-bundle --output /tmp/canca-r03-ci-manifest.json
+          bash docs/validation/R03_E0_LAB_GATE.sh /tmp/canca-r03-ci-bundle /tmp/canca-r03-ci-manifest.json
       - name: Qualify database and evidence store backup restore
         run: python tests/postgres_backup_restore_smoke.py --postgres-container "${{ job.services.postgres.id }}"
       - name: Record R03 automated preflight evidence
