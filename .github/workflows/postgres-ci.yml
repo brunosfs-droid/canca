@@ -43,6 +43,17 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - name: Validate composite E0 lab gate fails closed
+        run: |
+          bash -n docs/validation/R03_E0_LAB_GATE.sh
+          if bash docs/validation/R03_E0_LAB_GATE.sh; then
+            echo "R03 lab gate accepted missing bundle and manifest" >&2
+            exit 1
+          fi
+          if CANCA_E0_DISPOSABLE_DB=NO bash docs/validation/R03_E0_LAB_GATE.sh /missing/bundle /missing/manifest; then
+            echo "R03 lab gate accepted unsafe database confirmation" >&2
+            exit 1
+          fi
       - name: Validate R03 E0 bundle manifest integrity
         run: python -m unittest discover -s tests -p "test_r03_e0_bundle_manifest.py" -v
       - name: Validate R03 E0 preflight safety guard
