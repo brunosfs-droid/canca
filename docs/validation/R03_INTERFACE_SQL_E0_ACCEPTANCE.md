@@ -154,3 +154,18 @@ python docs/validation/R03_E0_BUNDLE_MANIFEST.py \
 ```
 
 O script `R03_E0_BUNDLE_MANIFEST.py` lê o bundle em modo somente leitura, rejeita links simbólicos, recusa sobrescrever uma evidência existente, calcula hashes por arquivo e produz um JSON. O manifesto **não aprova E0**, não comprova validade semântica das coletas e **não realiza importação nem restauração**. Antes de anexar o manifesto a PRs públicos, revisar os nomes dos arquivos e remover qualquer informação interna ou identificável. Preservar logs e arquivos completos exclusivamente em armazenamento autorizado.
+
+## Gate composto para o laboratório E0
+
+Após gerar o manifesto em área autorizada, executar no clone do repositório, usando **somente banco de laboratório descartável** com a sentinela provisionada:
+
+```bash
+export CANCA_E0_DISPOSABLE_DB=YES
+export CANCA_E0_EXPECTED_DB="$PGDATABASE"
+export CANCA_E0_LAB_ID="IDENTIFICADOR-CONFERIDO-NO-BANCO"
+bash docs/validation/R03_E0_LAB_GATE.sh \
+  /caminho/seguro/bundle-eve-ng \
+  /caminho/seguro/r03-bundle-manifest.json
+```
+
+O gate composto **verifica primeiro** os arquivos contra o manifesto SHA-256, interrompendo a execução caso haja divergências. **Somente depois** chama o preflight PostgreSQL protegido, que pode remover/recriar o schema `canca`. A validação de bytes e da suíte SQL não comprova importação real, comportamento da rede ou restauração do ambiente alvo. Esses itens e a aprovação operacional continuam no checklist E0.
