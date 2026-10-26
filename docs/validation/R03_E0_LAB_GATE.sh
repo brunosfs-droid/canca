@@ -17,4 +17,8 @@ fi
 python docs/validation/R03_E0_VERIFY_MANIFEST.py --bundle "$1" --manifest "$2"
 echo "E0 bundle integrity verified; starting guarded disposable PostgreSQL preflight"
 bash docs/validation/R03_E0_PREFLIGHT.sh
+# The integration suite is destructive on the disposable database only.
+# Re-check the source evidence after it completes, so accidental edits made
+# during the test window are not mistaken for a stable E0 input.
+python docs/validation/R03_E0_VERIFY_MANIFEST.py --bundle "$1" --manifest "$2"
 echo "E0 lab gate: preflight PASS. Real import/restore and operational sign-off still PENDING."
