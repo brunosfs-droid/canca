@@ -173,3 +173,12 @@ O gate composto **verifica primeiro** os arquivos contra o manifesto SHA-256, in
 ## Estabilidade do bundle durante o gate composto
 
 O `R03_E0_LAB_GATE.sh` confere o manifesto **antes e depois** da execução do preflight PostgreSQL. Se os bytes mudarem enquanto os testes estiverem em execução, o gate falha. A verificação final é uma medida de detecção, não uma garantia de snapshot atômico nem substitui a execução E0 de importação real, failover e restauração no laboratório.
+
+## Gate automatizado mais recente — SHA 0b06497
+
+- SHA: `0b06497fd0bf491a205fd5fde440ad7772056f1c`.
+- Oito workflows com conclusão **success**; PostgreSQL CI run `40388478292`.
+- PostgreSQL 16: gate composto, backup/restore e publicação do manifesto **success**; artefato `r03-preflight-postgres-16` (ID `12681063701`).
+- PostgreSQL 17: gate composto, backup/restore e publicação do manifesto **success**; artefato `r03-preflight-postgres-17` (ID `12680423856`).
+- Artefatos encontrados sem expiração na consulta. Retenção do workflow: 14 dias.
+- **Gate de liberação:** NÃO HOMOLOGADO. Faltam coleta/importação real no EVE-NG, recuperação operacional, restore do laboratório e revisão das evidências por operador. Os testes acima usam fixture sintética em banco descartável.
