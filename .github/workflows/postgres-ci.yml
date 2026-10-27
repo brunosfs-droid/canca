@@ -188,6 +188,7 @@ jobs:
           MATRIX_POSTGRES: ${{ matrix.postgres }}
         run: |
           mkdir -p r03-ci-evidence
+          cp /tmp/canca-r03-ci-lab-gate-result.json r03-ci-evidence/lab-gate-result.json
           python - <<'PY'
           import datetime
           import json
@@ -214,6 +215,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: r03-preflight-postgres-${{ matrix.postgres }}
-          path: r03-ci-evidence/result.json
+          path: r03-ci-evidence/*.json
           if-no-files-found: error
           retention-days: 14
