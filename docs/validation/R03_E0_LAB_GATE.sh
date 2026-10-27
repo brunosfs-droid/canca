@@ -22,3 +22,32 @@ bash docs/validation/R03_E0_PREFLIGHT.sh
 # during the test window are not mistaken for a stable E0 input.
 python docs/validation/R03_E0_VERIFY_MANIFEST.py --bundle "$1" --manifest "$2"
 echo "E0 lab gate: preflight PASS. Real import/restore and operational sign-off still PENDING."
+# Explicitly prevent this synthetic/preflight gate from being treated as full
+# operational E0 sign-off, regardless of the process exit status.
+if [[ -n "${CANCA_E0_RESULT_PATH:-}" ]]; then
+  if [[ -e "${CANCA_E0_RESULT_PATH}" ]]; then
+    echo "BLOCKED: refusing to overwrite prior E0 result file" >&2
+    exit 2
+  fi
+  CANCA_E0_RESULT_PATH="${CANCA_E0_RESULT_PATH}" python - <<'PY'
+import datetime
+import json
+import os
+from pathlib import Path
+
+target = Path(os.environ["CANCA_E0_RESULT_PATH"])
+result = {
+    "type": "canca.r03.e0.lab_gate_result.v1",
+    "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    "preflight": "passed",
+    "bundle_integrity_before_and_after": "passed",
+    "real_collection_import": "pending",
+    "operational_recovery": "pending",
+    "operational_backup_restore": "pending",
+    "operational_e0": "pending",
+}
+with target.open("x", encoding="utf-8") as output:
+    json.dump(result, output, indent=2, sort_keys=True)
+    output.write("\\n")
+PY
+fi
