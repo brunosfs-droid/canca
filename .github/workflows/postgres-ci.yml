@@ -171,7 +171,16 @@ jobs:
           mkdir -p /tmp/canca-r03-ci-bundle
           printf '%s\n' '{"interfaces":[]}' > /tmp/canca-r03-ci-bundle/ci-synthetic-evidence.json
           python docs/validation/R03_E0_BUNDLE_MANIFEST.py --bundle /tmp/canca-r03-ci-bundle --output /tmp/canca-r03-ci-manifest.json
-          bash docs/validation/R03_E0_LAB_GATE.sh /tmp/canca-r03-ci-bundle /tmp/canca-r03-ci-manifest.json
+          CANCA_E0_RESULT_PATH=/tmp/canca-r03-ci-lab-gate-result.json bash docs/validation/R03_E0_LAB_GATE.sh /tmp/canca-r03-ci-bundle /tmp/canca-r03-ci-manifest.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path("/tmp/canca-r03-ci-lab-gate-result.json").read_text())
+          assert result["preflight"] == "passed"
+          assert result["bundle_integrity_before_and_after"] == "passed"
+          for key in ("real_collection_import", "operational_recovery", "operational_backup_restore", "operational_e0"):
+              assert result[key] == "pending", key
+          PY
       - name: Qualify database and evidence store backup restore
         run: python tests/postgres_backup_restore_smoke.py --postgres-container "${{ job.services.postgres.id }}"
       - name: Record R03 automated preflight evidence
