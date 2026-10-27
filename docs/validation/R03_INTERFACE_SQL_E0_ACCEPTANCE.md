@@ -182,3 +182,19 @@ O `R03_E0_LAB_GATE.sh` confere o manifesto **antes e depois** da execução do p
 - PostgreSQL 17: gate composto, backup/restore e publicação do manifesto **success**; artefato `r03-preflight-postgres-17` (ID `12680423856`).
 - Artefatos encontrados sem expiração na consulta. Retenção do workflow: 14 dias.
 - **Gate de liberação:** NÃO HOMOLOGADO. Faltam coleta/importação real no EVE-NG, recuperação operacional, restore do laboratório e revisão das evidências por operador. Os testes acima usam fixture sintética em banco descartável.
+
+## Handoff operacional E0 — execução obrigatória no laboratório
+
+**Baseline automatizado mais recente:** `6c76ba68ac53036587236ff9706d511b3daf0c31`. Oito workflows `success`; PostgreSQL CI run `40526980695`, artefatos `r03-preflight-postgres-16` (ID `12744611925`) e `r03-preflight-postgres-17` (ID `12744442635`). Esses artefatos cobrem testes sintéticos, não aprovação E0.
+
+**Sequência de campo (somente após snapshot/backup conferido e banco descartável provisionado):**
+
+1. Separar cópia aprovada do bundle real EVE-NG. Não adicionar credenciais, endereços internos ou evidências sensíveis ao repositório público.
+2. Registrar hash SHA-256 em armazenamento restrito com `R03_E0_BUNDLE_MANIFEST.py`; executar `R03_E0_VERIFY_MANIFEST.py` imediatamente antes do teste.
+3. Executar `R03_E0_LAB_GATE.sh` apontando exclusivamente a banco descartável isolado e identidade `CANCA_E0_LAB_ID` conferida. Preservar resultado `CANCA_E0_RESULT_PATH`.
+4. Importar **de fato** a coleta verificada no fluxo Analyzer/Server do laboratório. Registrar workspace, collection_id, contagens de inserção e replay, IDs de evidência e versões; não confundir preflight sintético com esta etapa.
+5. Confirmar isolamento entre workspaces, revogação de grant, tokens obsoletos, replay idempotente e ausência de mutação do histórico; registrar consultas/logs higienizados.
+6. Interromper e recuperar coordenador; efetuar recuperação de banco e evidências a partir do backup operacional, comparar contagens e hashes originais.
+7. Anexar relatório assinado pelo operador com PASS/FAIL para cada item, desvios, SHA exato executado e decisão. Manter PR Draft se houver qualquer item pendente.
+
+**Bloqueio de liberação:** sem acesso às VMs, ao bundle real e à recuperação EVE-NG, não há homologação operacional demonstrada. Um CI verde não autoriza o merge.
