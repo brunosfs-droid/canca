@@ -18,6 +18,23 @@ from test_postgresql import fixture
 pg = ws.pg
 
 
+class WorkspaceSchemaExtensionTests(unittest.TestCase):
+    def test_workspace_scope_accepts_exact_verified_interface_migration(self):
+        conn=Mock()
+        with patch.object(pg,'schema_check',side_effect=[
+                pg.PersistenceError('schema_mismatch'),None]) as check:
+            ws.schema(conn)
+        self.assertEqual(check.call_count,2)
+        self.assertEqual(check.call_args.kwargs,{'minimum':11,'interfaces':True})
+
+    def test_workspace_scope_rejects_other_schema_failures(self):
+        with patch.object(pg,'schema_check',
+                          side_effect=pg.PersistenceError('database_failed')) as check:
+            with self.assertRaisesRegex(pg.PersistenceError,'database_failed'):
+                ws.schema(Mock())
+        check.assert_called_once()
+
+
 class WorkspaceInputTests(unittest.TestCase):
     def test_invalid_requests_are_rejected_before_opening_database(self):
         commands = [
