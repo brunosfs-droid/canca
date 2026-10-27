@@ -190,6 +190,15 @@ jobs:
           mkdir -p r03-ci-evidence
           cp /tmp/canca-r03-ci-lab-gate-result.json r03-ci-evidence/lab-gate-result.json
           python - <<'PY'
+          import json
+          from pathlib import Path
+          lab = json.loads(Path("r03-ci-evidence/lab-gate-result.json").read_text())
+          assert lab["preflight"] == "passed"
+          assert lab["bundle_integrity_before_and_after"] == "passed"
+          for field in ("real_collection_import", "operational_recovery", "operational_backup_restore", "operational_e0"):
+              assert lab[field] == "pending", field
+          PY
+          python - <<'PY'
           import datetime
           import json
           import os
