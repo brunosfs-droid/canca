@@ -1,0 +1,41 @@
+name: Projects V2 governance audit
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Apply only missing classifications (false = audit)'
+        type: boolean
+        required: true
+        default: false
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check project token
+        env:
+          GH_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Configure PROJECTS_TOKEN with project access before running."
+            exit 1
+          fi
+      - name: Audit or fill empty fields
+        env:
+          GH_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+          APPLY: ${{ inputs.apply }}
+        shell: bash
+        run: |
+          if [ "$APPLY" = "true" ]; then
+            python3 scripts/projects_v2_governance.py --apply | tee projects-audit.json
+          else
+            python3 scripts/projects_v2_governance.py | tee projects-audit.json
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: projects-v2-governance-audit
+          path: projects-audit.json
+          if-no-files-found: ignore
