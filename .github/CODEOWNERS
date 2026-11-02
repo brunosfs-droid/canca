@@ -1,7 +1,20 @@
-# Default repository owner
+# Default owner; CODEOWNERS requests review but does not itself enforce approval.
 * @brunosfs-droid
 
-# Collectors and schemas require explicit owner review
+# Sensitive runtime, collection, identity and persistence boundaries
+/agent/ @brunosfs-droid
 /collectors/ @brunosfs-droid
+/credential_manager/ @brunosfs-droid
+/credentialed_enrichment/ @brunosfs-droid
+/network_discovery/ @brunosfs-droid
+/ingestion/ @brunosfs-droid
+/orchestrator/ @brunosfs-droid
+/persistence/ @brunosfs-droid
+/runtime/ @brunosfs-droid
+/server/ @brunosfs-droid
 /schemas/ @brunosfs-droid
-/.github/workflows/ @brunosfs-droid
+
+# CI, dependency policy and security governance
+/.github/ @brunosfs-droid
+/scripts/projects_v2_governance.py @brunosfs-droid
+/docs/security/ @brunosfs-droid
