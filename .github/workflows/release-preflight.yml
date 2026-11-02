@@ -1,0 +1,33 @@
+name: Release Preflight (read-only)
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Proposed SemVer tag, e.g. v0.7.0-alpha.1'
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: release-preflight
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect main commit checks and tag collision
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROPOSED_TAG: ${{ inputs.tag }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: python3 scripts/release_preflight.py --tag "$PROPOSED_TAG" --sha "$COMMIT_SHA" --output release-preflight.json
+      - name: Upload review evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-preflight
+          path: release-preflight.json
+          if-no-files-found: warn
+          retention-days: 14
