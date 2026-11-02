@@ -1,6 +1,7 @@
 import importlib.util
 import pathlib
 import unittest
+from unittest.mock import patch
 
 MODULE_PATH = pathlib.Path(__file__).resolve().parents[1] / 'network_discovery' / 'P01_Network_Discovery_Scanner.py'
 spec = importlib.util.spec_from_file_location('p01_network_discovery', MODULE_PATH)
@@ -65,6 +66,41 @@ class ClassificationTests(unittest.TestCase):
         self.assertEqual(len(correlations), 1)
         self.assertEqual(correlations[0]["ips"], ["192.168.15.7", "192.168.15.102"])
         self.assertFalse(correlations[0]["automatic_deduplication"])
+
+
+
+class HTTPSProbeSecurityTests(unittest.TestCase):
+    def test_https_probe_uses_verified_default_context(self):
+        class FakeResponse:
+            status = 200
+            reason = "OK"
+            def getheader(self, key): return None
+        class FakeConnection:
+            sock = None
+            def __init__(self, *args, **kwargs):
+                self.context = kwargs.get("context")
+            def request(self, *args, **kwargs): pass
+            def getresponse(self): return FakeResponse()
+            def close(self): pass
+        with patch.object(mod.ssl, "create_default_context", return_value="VERIFIED") as factory, \
+             patch.object(mod.http.client, "HTTPSConnection", FakeConnection):
+            result = mod.http_probe("192.0.2.10", 443, tls=True, timeout=1)
+        factory.assert_called_once_with()
+        self.assertEqual(result["tls_certificate_validation"], "required")
+        self.assertEqual(result["http_status"], 200)
+
+    def test_https_certificate_error_is_observed_without_unsafe_retry(self):
+        class RejectConnection:
+            def __init__(self, *args, **kwargs): pass
+            def request(self, *args, **kwargs):
+                raise mod.ssl.SSLCertVerificationError("certificate verification failed")
+            def close(self): pass
+        with patch.object(mod.http.client, "HTTPSConnection", RejectConnection), \
+             patch.object(mod.ssl, "_create_unverified_context", side_effect=AssertionError("unsafe fallback")):
+            result = mod.http_probe("192.0.2.10", 443, tls=True, timeout=1)
+        self.assertEqual(result["tls_certificate_validation"], "required")
+        self.assertIn("probe_error", result)
+        self.assertNotIn("http_status", result)
 
 
 if __name__ == '__main__':

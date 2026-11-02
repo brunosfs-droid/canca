@@ -214,8 +214,12 @@ def http_probe(ip: str, port: int, tls: bool, timeout: float) -> Dict[str, Any]:
     conn: Any = None
     try:
         if tls:
-            context = ssl._create_unverified_context()
+            # Discovery must not silently disable HTTPS certificate verification.
+            # A self-signed or mismatched certificate is recorded as probe_error;
+            # the independently observed open port remains in discovery evidence.
+            context = ssl.create_default_context()
             conn = http.client.HTTPSConnection(ip, port=port, timeout=timeout, context=context)
+            result["tls_certificate_validation"] = "required"
         else:
             conn = http.client.HTTPConnection(ip, port=port, timeout=timeout)
         conn.request("HEAD", "/", headers={"Host": ip, "User-Agent": "OrizonIT-P01-Discovery/0.4"})
