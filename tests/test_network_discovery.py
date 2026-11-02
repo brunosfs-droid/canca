@@ -82,7 +82,7 @@ class HTTPSProbeSecurityTests(unittest.TestCase):
             def request(self, *args, **kwargs): pass
             def getresponse(self): return FakeResponse()
             def close(self): pass
-        with patch.object(mod.ssl, "create_default_context", return_value="VERIFIED") as factory, \\
+        with patch.object(mod.ssl, "create_default_context", return_value="VERIFIED") as factory, \
              patch.object(mod.http.client, "HTTPSConnection", FakeConnection):
             result = mod.http_probe("192.0.2.10", 443, tls=True, timeout=1)
         factory.assert_called_once_with()
@@ -95,7 +95,7 @@ class HTTPSProbeSecurityTests(unittest.TestCase):
             def request(self, *args, **kwargs):
                 raise mod.ssl.SSLCertVerificationError("certificate verification failed")
             def close(self): pass
-        with patch.object(mod.http.client, "HTTPSConnection", RejectConnection), \\
+        with patch.object(mod.http.client, "HTTPSConnection", RejectConnection), \
              patch.object(mod.ssl, "_create_unverified_context", side_effect=AssertionError("unsafe fallback")):
             result = mod.http_probe("192.0.2.10", 443, tls=True, timeout=1)
         self.assertEqual(result["tls_certificate_validation"], "required")
