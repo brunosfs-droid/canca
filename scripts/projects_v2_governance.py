@@ -94,6 +94,8 @@ def audit_metrics(changes, inspected_items):
         by_action[action] = by_action.get(action, 0) + 1
     return {
         "inspected_items": inspected_items,
+        "field_values_inspected": inspected_items * len(FIELDS),
+        "classification_gaps_without_suggestion": "unknown",
         "proposed_changes": len(changes),
         "missing_by_field": by_field,
         "actions": dict(sorted(by_action.items())),
