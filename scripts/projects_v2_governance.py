@@ -101,6 +101,10 @@ def audit_metrics(changes, inspected_items):
     }
 
 
+def gaps_without_suggestion(existing, proposed):
+    return [name for name in FIELDS if not existing.get(name) and not proposed.get(name)]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true", help="Write only missing field values")
@@ -128,9 +132,8 @@ def main():
             existing = {v["field"]["name"]: v["name"] for v in item["fieldValues"]["nodes"]
                         if v and v.get("field") and v.get("name")}
             proposed = classification(content)
-            for field_name in FIELDS:
-                if not existing.get(field_name) and not proposed.get(field_name):
-                    missing_without_suggestion[field_name] += 1
+            for field_name in gaps_without_suggestion(existing, proposed):
+                missing_without_suggestion[field_name] += 1
             for field_name, value in proposed.items():
                 if not value or existing.get(field_name):
                     continue
