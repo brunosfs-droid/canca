@@ -77,6 +77,8 @@ def main():
     if views["pageInfo"]["hasNextPage"]:
         raise RuntimeError("View listing truncated; refusing to create duplicates")
     actions = plan(views["nodes"])
+    if any(x["action"] == "review_layout_mismatch" for x in actions):
+        raise RuntimeError("View layout mismatch requires manual review before any creation")
     for item in actions:
         if item["action"] == "create":
             if args.apply:
@@ -88,8 +90,6 @@ def main():
     print(json.dumps({"mode": "apply" if args.apply else "dry_run",
                       "project_url": f"https://github.com/users/{OWNER}/projects/{NUMBER}",
                       "views": actions}, indent=2, ensure_ascii=False))
-    if any(x["action"] == "review_layout_mismatch" for x in actions):
-        raise RuntimeError("View layout mismatch requires manual review")
 
 
 if __name__ == "__main__":
