@@ -105,6 +105,28 @@ def gaps_without_suggestion(existing, proposed):
     return [name for name in FIELDS if not existing.get(name) and not proposed.get(name)]
 
 
+def consistency_warnings(content, existing):
+    """Report contradictions without making classification decisions."""
+    labels = {row["name"].lower() for row in content["labels"]["nodes"]}
+    warnings = []
+    priority_labels = sorted(x for x in labels if x in
+                             {"priority:p0", "priority:p1", "priority:p2", "priority:p3"})
+    if len(priority_labels) > 1:
+        warnings.append("multiple_priority_labels")
+    areas = sorted(x for x in labels if x in
+                   {"area:r01", "area:r02", "area:r03", "area:r04", "area:r05", "area:r06"})
+    if len(areas) > 1:
+        warnings.append("multiple_workstream_labels")
+    milestone = (content.get("milestone") or {}).get("title", "")
+    if milestone == "Community Beta" and existing.get("Target Release") == "Alpha":
+        warnings.append("beta_milestone_alpha_release")
+    if milestone in {"Product Alpha", "M-A · Isolation", "M-B · Collectors",
+                     "M-C · Model & Observations", "M-D · Graph & Topology",
+                     "M-E · Recovery & Quality"} and existing.get("Target Release") == "Beta":
+        warnings.append("alpha_milestone_beta_release")
+    return warnings
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true", help="Write only missing field values")
@@ -115,6 +137,7 @@ def main():
     audit = []
     inspected_items = 0
     missing_without_suggestion = {name: 0 for name in FIELDS}
+    consistency_findings = []
     while True:
         project = graphql(QUERY, {"owner": OWNER, "number": PROJECT_NUMBER, "cursor": cursor})["user"]["projectV2"]
         if not project:
@@ -132,6 +155,8 @@ def main():
             existing = {v["field"]["name"]: v["name"] for v in item["fieldValues"]["nodes"]
                         if v and v.get("field") and v.get("name")}
             proposed = classification(content)
+            for warning in consistency_warnings(content, existing):
+                consistency_findings.append({"number": content["number"], "rule": warning})
             for field_name in gaps_without_suggestion(existing, proposed):
                 missing_without_suggestion[field_name] += 1
             for field_name, value in proposed.items():
@@ -151,12 +176,13 @@ def main():
         cursor = items["pageInfo"]["endCursor"]
     metrics = audit_metrics(audit, inspected_items)
     metrics["missing_without_suggestion"] = missing_without_suggestion
+    metrics["consistency_findings_count"] = len(consistency_findings)
     metrics["missing_total_by_field"] = {
         name: metrics["missing_by_field"][name] + missing_without_suggestion[name]
         for name in FIELDS
     }
     print(json.dumps({"mode": "apply" if args.apply else "dry_run", "changes": audit,
-                      "metrics": metrics},
+                      "consistency_findings": consistency_findings, "metrics": metrics},
                      indent=2, ensure_ascii=False))
     if any(a["action"] == "skipped_missing_option" for a in audit):
         sys.exit("One or more desired field options do not exist; no values were invented.")
