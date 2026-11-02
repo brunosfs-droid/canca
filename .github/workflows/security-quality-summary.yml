@@ -1,0 +1,57 @@
+name: Security and Quality Summary
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '37 10 * * 5'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-quality-summary
+  cancel-in-progress: false
+
+jobs:
+  summary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install static analyzers
+        run: python -m pip install 'bandit>=1.8,<2' 'ruff>=0.14,<1' pip-audit
+      - name: Generate fresh scan results
+        shell: bash
+        run: |
+          set +e
+          mkdir -p scan-results
+          bandit -r agent analyzer assessment asset_resolver collectors connected credential_manager credentialed_enrichment evidence_bundle ingestion network_discovery orchestrator persistence runtime server -f json -o scan-results/bandit.json
+          python -m ruff check . --select E4,E7,E9,F --output-format json > scan-results/ruff.json
+          for manifest in agent/requirements-windows-service.txt credentialed_enrichment/requirements-snmp.txt credentialed_enrichment/requirements-ssh.txt credentialed_enrichment/requirements-winrm.txt persistence/requirements-postgres.txt; do
+            name="$(basename "$manifest" .txt)"
+            python -m pip_audit -r "$manifest" --format json --output "scan-results/$name.json" --progress-spinner off
+          done
+          exit 0
+      - name: Consolidate scan results
+        shell: bash
+        run: |
+          python scripts/security_quality_summary.py \
+            --bandit scan-results/bandit.json \
+            --ruff scan-results/ruff.json \
+            --audit agent scan-results/requirements-windows-service.json \
+            --audit snmp scan-results/requirements-snmp.json \
+            --audit ssh scan-results/requirements-ssh.json \
+            --audit winrm scan-results/requirements-winrm.json \
+            --audit postgres scan-results/requirements-postgres.json \
+            --output scan-results/security-quality-summary.json
+      - name: Upload reports for manual review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-quality-summary
+          path: scan-results/
+          if-no-files-found: warn
+          retention-days: 7
