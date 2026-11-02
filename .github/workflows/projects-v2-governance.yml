@@ -39,9 +39,14 @@ jobs:
           else
             python3 scripts/projects_v2_governance.py | tee projects-audit.json
           fi
+      - name: Generate read-only governance dashboard
+        if: success()
+        run: python3 scripts/projects_v2_dashboard.py --input projects-audit.json --output projects-dashboard.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: projects-v2-governance-audit
-          path: projects-audit.json
+          path: |
+            projects-audit.json
+            projects-dashboard.json
           if-no-files-found: ignore
