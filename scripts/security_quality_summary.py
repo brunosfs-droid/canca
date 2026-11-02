@@ -15,7 +15,7 @@ def read_report(path):
 
 def summarize(bandit, ruff, audits):
     output = {"schema_version": 1, "bandit": {}, "ruff": {}, "dependencies": {}}
-    if bandit is None or not isinstance(bandit.get("results"), list):
+    if not isinstance(bandit, dict) or not isinstance(bandit.get("results"), list):
         output["bandit"] = {"status": "unavailable"}
     else:
         counts = Counter(x.get("issue_severity", "UNKNOWN").upper() for x in bandit["results"])
