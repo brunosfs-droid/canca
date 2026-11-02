@@ -1,0 +1,32 @@
+name: Alpha Readiness Evidence Inventory
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '11 10 * * 2'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: alpha-readiness-inventory
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inventory GitHub Alpha gates (read-only)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/alpha_readiness_inventory.py --output alpha-readiness.json
+      - name: Upload Alpha gate evidence inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha-readiness-evidence
+          path: alpha-readiness.json
+          if-no-files-found: warn
+          retention-days: 14
