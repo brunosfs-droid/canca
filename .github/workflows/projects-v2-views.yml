@@ -1,0 +1,44 @@
+name: Projects V2 permanent views
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Create missing governance views (false = audit only)'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: projects-v2-permanent-views
+  cancel-in-progress: false
+
+jobs:
+  views:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect or provision views
+        env:
+          GH_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+          APPLY: ${{ inputs.apply }}
+        shell: bash
+        run: |
+          set -o pipefail
+          if [ "$APPLY" = "true" ]; then
+            python3 scripts/projects_v2_views.py --apply | tee projects-views.json
+          else
+            python3 scripts/projects_v2_views.py | tee projects-views.json
+          fi
+      - name: Upload view audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: projects-v2-views
+          path: projects-views.json
+          if-no-files-found: warn
+          retention-days: 7
