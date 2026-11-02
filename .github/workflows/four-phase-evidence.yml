@@ -1,0 +1,21 @@
+name: Four-Phase Governance Evidence Audit
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit governance source controls
+        run: python3 scripts/four_phase_evidence_audit.py --output four-phase-evidence.json
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: four-phase-governance-evidence
+          path: four-phase-evidence.json
+          if-no-files-found: error
+          retention-days: 14
