@@ -20,6 +20,8 @@ def evaluate(tag, sha, checks, existing_ref=None):
         name = check.get("name")
         if name:
             names.setdefault(name, []).append(check)
+    # The manually dispatched preflight itself is not a prerequisite check.
+    names.pop("preflight", None)
     passed = sorted(name for name, entries in names.items() if
                     any(x.get("status") == "completed" and x.get("conclusion") == "success"
                         for x in entries))
@@ -65,7 +67,9 @@ def main():
         json.dump(report, output, ensure_ascii=False, indent=2)
         output.write("\n")
     print(json.dumps(report, ensure_ascii=False))
-    return 0 if not report["check_runs_not_successful"] else 1
+    # Evidence collection succeeds even when the proposed release needs review.
+    # The JSON explicitly records incomplete checks and never authorizes publication.
+    return 0
 
 
 if __name__ == "__main__":

@@ -17,6 +17,21 @@ class ReleasePreflightTests(unittest.TestCase):
         self.assertEqual(data["publication"], "not_performed")
         self.assertEqual(data["check_runs_not_successful"], [])
 
+    def test_own_preflight_is_excluded_from_release_prerequisites(self):
+        data = mod.evaluate("v0.7.0-alpha.1", "a" * 40, [
+            {"name": "preflight", "status": "in_progress", "conclusion": None},
+            {"name": "validate-python", "status": "completed", "conclusion": "success"},
+        ])
+        self.assertEqual(data["check_runs_not_successful"], [])
+        self.assertEqual(data["decision"], "review_required")
+
+    def test_pending_check_still_requires_review(self):
+        data = mod.evaluate("v0.7.0-alpha.1", "a" * 40, [
+            {"name": "validate-python", "status": "in_progress", "conclusion": None},
+        ])
+        self.assertEqual(data["check_runs_not_successful"], ["validate-python"])
+        self.assertEqual(data["publication"], "not_performed")
+
     def test_bad_tag_and_existing_tag_are_rejected(self):
         with self.assertRaises(ValueError):
             mod.evaluate("latest", "a" * 40, [])
