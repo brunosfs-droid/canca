@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 path = Path(__file__).resolve().parents[1] / "scripts" / "projects_v2_views.py"
 spec = importlib.util.spec_from_file_location("projects_v2_views", path)
@@ -9,6 +10,15 @@ spec.loader.exec_module(mod)
 
 
 class ProjectsViewsTests(unittest.TestCase):
+    def test_project_number_is_passed_as_graphql_int(self):
+        from types import SimpleNamespace
+        result = SimpleNamespace(returncode=0, stdout='{"data":{"user":null}}', stderr="")
+        with patch.object(mod.subprocess, "run", return_value=result) as runner:
+            mod.graphql("query", {"owner": "brunosfs-droid", "number": 4})
+        argv = runner.call_args.args[0]
+        self.assertIn("-F", argv)
+        self.assertEqual(argv[argv.index("-F") + 1], "number=4")
+
     def test_missing_views_proposed_and_existing_views_preserved(self):
         existing = [{"id": "1", "name": "Governance · Overview", "layout": "TABLE_LAYOUT"},
                     {"id": "2", "name": "Existing user view", "layout": "BOARD_LAYOUT"}]
