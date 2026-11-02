@@ -1,0 +1,20 @@
+name: Git Revert Rehearsal
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-revert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rehearse change and revert in isolated repository
+        run: python3 scripts/revert_drill.py --output revert-drill-evidence.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: revert-drill-evidence
+          path: revert-drill-evidence.json
+          if-no-files-found: warn
+          retention-days: 14
