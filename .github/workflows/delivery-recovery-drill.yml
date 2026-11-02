@@ -1,0 +1,32 @@
+name: Delivery Configuration Recovery Drill
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: delivery-recovery-drill
+  cancel-in-progress: false
+
+jobs:
+  recover-local:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reconstruct governance and CI configuration in temporary directory
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: python3 scripts/delivery_recovery_drill.py --sha "$SOURCE_SHA" --output delivery-recovery-evidence.json
+      - name: Upload recovery drill evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: delivery-recovery-evidence
+          path: delivery-recovery-evidence.json
+          if-no-files-found: warn
+          retention-days: 14
