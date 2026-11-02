@@ -153,5 +153,63 @@ class SafetyTests(unittest.TestCase):
         self.assertEqual(candidates[0]["authorization_status"], "unassessed")
 
 
+
+class HostKeyTrustTests(unittest.TestCase):
+    def test_strict_rejects_unknown_host(self):
+        class RejectPolicy:
+            pass
+        class MissingHostKeyPolicy:
+            pass
+        class FakeClient:
+            def load_system_host_keys(self): pass
+            def set_missing_host_key_policy(self, policy): self.policy = policy
+        fake = SimpleNamespace(SSHClient=FakeClient, RejectPolicy=RejectPolicy,
+                               MissingHostKeyPolicy=MissingHostKeyPolicy)
+        with patch.object(mod, "paramiko", fake):
+            client = mod.prepare_ssh_client(pathlib.Path("nonexistent-hostkeys"), "strict")
+            self.assertIsInstance(client.policy, RejectPolicy)
+
+    def test_tofu_pins_key_in_memory_without_premature_disk_write(self):
+        class MissingHostKeyPolicy:
+            pass
+        class FakeKeys:
+            def __init__(self): self.added = []
+            def add(self, hostname, algorithm, key): self.added.append((hostname, algorithm, key))
+        class FakeClient:
+            def __init__(self): self.keys = FakeKeys()
+            def load_system_host_keys(self): pass
+            def set_missing_host_key_policy(self, policy): self.policy = policy
+            def get_host_keys(self): return self.keys
+        fake = SimpleNamespace(SSHClient=FakeClient, MissingHostKeyPolicy=MissingHostKeyPolicy)
+        with patch.object(mod, "paramiko", fake):
+            client = mod.prepare_ssh_client(pathlib.Path("nonexistent-hostkeys"), "tofu")
+            key = SimpleNamespace(get_name=lambda: "ssh-ed25519")
+            client.policy.missing_host_key(client, "192.0.2.10", key)
+            self.assertEqual(client.keys.added, [("192.0.2.10", "ssh-ed25519", key)])
+
+    def test_tofu_rejects_symlinked_known_hosts(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            target = root / "target"
+            target.write_text("not-a-real-known-hosts", encoding="utf-8")
+            link = root / "known_hosts"
+            try:
+                link.symlink_to(target)
+            except (OSError, NotImplementedError):
+                self.skipTest("symlinks unavailable")
+            with patch.object(mod, "paramiko", object()):
+                with self.assertRaisesRegex(RuntimeError, "symbolic link"):
+                    mod.prepare_ssh_client(link, "tofu")
+
+    def test_tofu_save_failure_is_not_silenced(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            class FakeClient:
+                def save_host_keys(self, path): raise OSError("cannot persist trust")
+            with self.assertRaises(OSError):
+                mod._save_tofu_host_key(FakeClient(), pathlib.Path(directory) / "known_hosts", "tofu")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -248,6 +248,10 @@ def prepare_ssh_client(known_hosts: Path, host_key_policy: str) -> Any:
             "python -m pip install -r credentialed_enrichment/requirements-ssh.txt"
         )
 
+    # Refuse symlinked trust stores to avoid redirecting reads or writes.
+    if known_hosts.is_symlink():
+        raise RuntimeError("SSH known-hosts path must not be a symbolic link")
+
     client = paramiko.SSHClient()
     client.load_system_host_keys()
     if known_hosts.exists():
@@ -259,7 +263,13 @@ def prepare_ssh_client(known_hosts: Path, host_key_policy: str) -> Any:
     if host_key_policy == "strict":
         client.set_missing_host_key_policy(paramiko.RejectPolicy())
     elif host_key_policy == "tofu":
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        # The CLI requires explicit --ack-tofu-host-key before reaching here.
+        # Pin an unknown key in memory; persist it only after successful auth.
+        class FirstUsePinPolicy(paramiko.MissingHostKeyPolicy):
+            def missing_host_key(self, ssh_client, hostname, key):
+                ssh_client.get_host_keys().add(hostname, key.get_name(), key)
+
+        client.set_missing_host_key_policy(FirstUsePinPolicy())
     else:
         raise ValueError(f"Unsupported host-key policy: {host_key_policy}")
     return client
@@ -268,13 +278,14 @@ def prepare_ssh_client(known_hosts: Path, host_key_policy: str) -> Any:
 def _save_tofu_host_key(client: Any, known_hosts: Path, policy: str) -> None:
     if policy != "tofu":
         return
+    if known_hosts.is_symlink():
+        raise RuntimeError("SSH known-hosts path must not be a symbolic link")
     known_hosts.parent.mkdir(parents=True, exist_ok=True)
+    if os.name != "nt" and known_hosts.exists():
+        os.chmod(known_hosts, 0o600)
     client.save_host_keys(str(known_hosts))
-    try:
-        if os.name != "nt":
-            os.chmod(known_hosts, 0o600)
-    except OSError:
-        pass
+    if os.name != "nt":
+        os.chmod(known_hosts, 0o600)
 
 
 def parse_ip_json_interfaces(text: str) -> List[Dict[str, Any]]:
