@@ -1,0 +1,59 @@
+name: Dependency Security Audit
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '41 7 * * 3'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-audit:
+    name: Python dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        requirements:
+          - agent/requirements.txt
+          - credentialed_enrichment/requirements-snmp.txt
+          - credentialed_enrichment/requirements-ssh.txt
+          - credentialed_enrichment/requirements-winrm.txt
+          - persistence/requirements.txt
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pip-audit
+        run: python -m pip install pip-audit
+      - name: Check manifest presence
+        id: manifest
+        shell: bash
+        env:
+          MANIFEST: ${{ matrix.requirements }}
+        run: |
+          if [ -f "$MANIFEST" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No requirements manifest found at $MANIFEST; audit skipped."
+          fi
+      - name: Audit declared Python dependencies (advisory only)
+        if: steps.manifest.outputs.exists == 'true'
+        continue-on-error: true
+        env:
+          MANIFEST: ${{ matrix.requirements }}
+        run: python -m pip_audit -r "$MANIFEST" --progress-spinner off
