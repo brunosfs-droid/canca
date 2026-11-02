@@ -84,6 +84,22 @@ def classification(content):
         priority = None
     return {"Priority": priority, "Workstream": workstream, "Target Release": release}
 
+def audit_metrics(changes, inspected_items):
+    """Aggregate only observed classifications; never infer missing priorities."""
+    by_field = {name: 0 for name in FIELDS}
+    by_action = {}
+    for entry in changes:
+        by_field[entry["field"]] += 1
+        action = entry["action"]
+        by_action[action] = by_action.get(action, 0) + 1
+    return {
+        "inspected_items": inspected_items,
+        "proposed_changes": len(changes),
+        "missing_by_field": by_field,
+        "actions": dict(sorted(by_action.items())),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true", help="Write only missing field values")
@@ -92,6 +108,7 @@ def main():
         sys.exit("GH_TOKEN is required (GitHub Projects access).")
     cursor = None
     audit = []
+    inspected_items = 0
     while True:
         project = graphql(QUERY, {"owner": OWNER, "number": PROJECT_NUMBER, "cursor": cursor})["user"]["projectV2"]
         if not project:
@@ -105,6 +122,7 @@ def main():
             content = item.get("content")
             if not content or content.get("repository", {}).get("nameWithOwner") != REPOSITORY:
                 continue
+            inspected_items += 1
             existing = {v["field"]["name"]: v["name"] for v in item["fieldValues"]["nodes"]
                         if v and v.get("field") and v.get("name")}
             proposed = classification(content)
@@ -123,7 +141,7 @@ def main():
         if not items["pageInfo"]["hasNextPage"]:
             break
         cursor = items["pageInfo"]["endCursor"]
-    print(json.dumps({"mode": "apply" if args.apply else "dry_run", "changes": audit}, indent=2, ensure_ascii=False))
+    print(json.dumps({"mode": "apply" if args.apply else "dry_run", "changes": audit,\n                      "metrics": audit_metrics(audit, inspected_items)},\n                     indent=2, ensure_ascii=False))
     if any(a["action"] == "skipped_missing_option" for a in audit):
         sys.exit("One or more desired field options do not exist; no values were invented.")
 
