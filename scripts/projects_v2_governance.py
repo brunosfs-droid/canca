@@ -157,6 +157,7 @@ def main():
     inspected_items = 0
     missing_without_suggestion = {name: 0 for name in FIELDS}
     consistency_findings = []
+    unclassified_items = []
     while True:
         project = graphql(QUERY, {"owner": OWNER, "number": PROJECT_NUMBER, "cursor": cursor})["user"]["projectV2"]
         if not project:
@@ -176,8 +177,11 @@ def main():
             proposed = classification(content)
             for warning in consistency_warnings(content, existing):
                 consistency_findings.append({"number": content["number"], "rule": warning})
-            for field_name in gaps_without_suggestion(existing, proposed):
+            gaps = gaps_without_suggestion(existing, proposed)
+            for field_name in gaps:
                 missing_without_suggestion[field_name] += 1
+            if gaps:
+                unclassified_items.append({"number": content["number"], "fields": gaps})
             for field_name, value in proposed.items():
                 if not value or existing.get(field_name):
                     continue
@@ -203,6 +207,7 @@ def main():
     print(json.dumps({"mode": "apply" if args.apply else "dry_run", "changes": audit,
                       "consistency_findings": consistency_findings,
                       "manual_triage": triage_summary(audit, consistency_findings, missing_without_suggestion),
+                      "unclassified_items": unclassified_items,
                       "metrics": metrics},
                      indent=2, ensure_ascii=False))
     if any(a["action"] == "skipped_missing_option" for a in audit):
