@@ -45,7 +45,8 @@ jobs:
           code=$?
           echo "Bandit exit code: $code"
           if [ "$code" -gt 1 ]; then
-            echo "::warning::Bandit execution error; inspect the artifact and logs."
+            echo "::error::Bandit execution failed (exit $code); this scan cannot be trusted."
+            exit "$code"
           elif [ "$code" -eq 1 ]; then
             echo "::warning::Bandit detected potential security issues; review report."
           fi
