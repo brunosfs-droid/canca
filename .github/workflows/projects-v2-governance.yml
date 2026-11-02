@@ -42,6 +42,11 @@ jobs:
       - name: Generate read-only governance dashboard
         if: success()
         run: python3 scripts/projects_v2_dashboard.py --input projects-audit.json --output projects-dashboard.json
+      - name: Publish governance dashboard to job summary
+        if: success()
+        run: |
+          python3 scripts/projects_v2_dashboard_markdown.py --input projects-dashboard.json --output projects-dashboard.md
+          cat projects-dashboard.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -49,4 +54,5 @@ jobs:
           path: |
             projects-audit.json
             projects-dashboard.json
+            projects-dashboard.md
           if-no-files-found: ignore
