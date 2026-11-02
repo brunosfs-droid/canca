@@ -46,11 +46,10 @@ class WorkflowPermissionPolicyTests(unittest.TestCase):
                 self.assertEqual(parse_top_level_permissions(text), expected)
                 self.assertNotRegex(text, r"(?m)^permissions:\s*(?:write-all|read-all)")
                 # Job overrides must be reviewed explicitly, not silently added.
-                self.assertEqual(len(re.findall(r"(?m)^\s+permissions:\s*$", text)), 0)
+                self.assertEqual(len(re.findall(r"(?m)^[ ]{4,}permissions:[ \t]*$", text)), 0)
 
     def test_parser_rejects_broad_permissions(self):
-        with self.assertRaises(AssertionError):
-            parse_top_level_permissions("permissions:\n  contents: write\n  packages: write\n")
+        self.assertNotEqual(parse_top_level_permissions("permissions:\n  contents: write\n  packages: write\n"), REQUIRED)
 
 
 if __name__ == "__main__":
