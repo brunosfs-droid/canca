@@ -51,6 +51,22 @@ class GovernanceMetricsTests(unittest.TestCase):
                    "milestone": {"title": "Product Alpha"}}
         self.assertEqual(mod.consistency_warnings(content, {"Target Release": "Alpha"}), [])
 
+    def test_manual_triage_groups_conflicts_and_missing_options(self):
+        changes = [{"number": 11, "field": "Priority", "action": "skipped_missing_option"},
+                   {"number": 11, "field": "Workstream", "action": "skipped_missing_option"}]
+        findings = [{"number": 11, "rule": "multiple_priority_labels"},
+                    {"number": 12, "rule": "alpha_milestone_beta_release"}]
+        result = mod.triage_summary(changes, findings, {"Target Release": 3})
+        self.assertEqual(result["requires_manual_classification"]["Target Release"], 3)
+        self.assertEqual(result["review_items"], [
+            {"number": 11, "reason": "classification_conflict",
+             "details": ["multiple_priority_labels"]},
+            {"number": 11, "reason": "missing_project_option",
+             "details": ["Priority", "Workstream"]},
+            {"number": 12, "reason": "classification_conflict",
+             "details": ["alpha_milestone_beta_release"]},
+        ])
+
     def test_no_classification_is_not_interpreted_as_compliant(self):
         result = mod.audit_metrics([], inspected_items=7)
         self.assertEqual(result["proposed_changes"], 0)
