@@ -31,6 +31,26 @@ class GovernanceMetricsTests(unittest.TestCase):
             {"Priority": "P1"}, {"Priority": None, "Workstream": "Security", "Target Release": None})
         self.assertEqual(missing, ["Target Release"])
 
+    def test_reports_conflicting_priority_and_workstream_labels(self):
+        content = {"labels": {"nodes": [
+            {"name": "priority:p0"}, {"name": "priority:p2"},
+            {"name": "area:r01"}, {"name": "area:r03"}]}, "milestone": None}
+        self.assertEqual(mod.consistency_warnings(content, {}), [
+            "multiple_priority_labels", "multiple_workstream_labels"])
+
+    def test_reports_release_milestone_conflict_without_modifying_it(self):
+        content = {"labels": {"nodes": []},
+                   "milestone": {"title": "Community Beta"}}
+        existing = {"Target Release": "Alpha"}
+        self.assertEqual(mod.consistency_warnings(content, existing),
+                         ["beta_milestone_alpha_release"])
+        self.assertEqual(existing["Target Release"], "Alpha")
+
+    def test_no_warning_for_consistent_fields(self):
+        content = {"labels": {"nodes": [{"name": "priority:p1"}]},
+                   "milestone": {"title": "Product Alpha"}}
+        self.assertEqual(mod.consistency_warnings(content, {"Target Release": "Alpha"}), [])
+
     def test_no_classification_is_not_interpreted_as_compliant(self):
         result = mod.audit_metrics([], inspected_items=7)
         self.assertEqual(result["proposed_changes"], 0)
