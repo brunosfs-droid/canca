@@ -127,6 +127,25 @@ def consistency_warnings(content, existing):
     return warnings
 
 
+def triage_summary(changes, findings, missing_without_suggestion):
+    """Provide deterministic, read-only queues for operator review."""
+    queue = {}
+    for entry in changes:
+        if entry["action"] == "skipped_missing_option":
+            key = ("missing_project_option", entry["number"])
+            queue.setdefault(key, set()).add(entry["field"])
+    for entry in findings:
+        key = ("classification_conflict", entry["number"])
+        queue.setdefault(key, set()).add(entry["rule"])
+    return {
+        "requires_manual_classification": dict(missing_without_suggestion),
+        "review_items": [
+            {"number": number, "reason": reason, "details": sorted(values)}
+            for (reason, number), values in sorted(queue.items(), key=lambda x: (x[0][1], x[0][0]))
+        ],
+    }
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true", help="Write only missing field values")
@@ -182,7 +201,9 @@ def main():
         for name in FIELDS
     }
     print(json.dumps({"mode": "apply" if args.apply else "dry_run", "changes": audit,
-                      "consistency_findings": consistency_findings, "metrics": metrics},
+                      "consistency_findings": consistency_findings,
+                      "manual_triage": triage_summary(audit, consistency_findings, missing_without_suggestion),
+                      "metrics": metrics},
                      indent=2, ensure_ascii=False))
     if any(a["action"] == "skipped_missing_option" for a in audit):
         sys.exit("One or more desired field options do not exist; no values were invented.")
