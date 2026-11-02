@@ -67,6 +67,11 @@ class GovernanceMetricsTests(unittest.TestCase):
              "details": ["alpha_milestone_beta_release"]},
         ])
 
+    def test_unsuggestable_fields_are_not_guessed(self):
+        existing = {"Priority": "P2"}
+        proposed = {"Priority": None, "Workstream": None, "Target Release": "Alpha"}
+        self.assertEqual(mod.gaps_without_suggestion(existing, proposed), ["Workstream"])
+
     def test_no_classification_is_not_interpreted_as_compliant(self):
         result = mod.audit_metrics([], inspected_items=7)
         self.assertEqual(result["proposed_changes"], 0)
