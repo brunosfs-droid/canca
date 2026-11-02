@@ -24,10 +24,17 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Fetch PR base for incremental security gate
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: git fetch --no-tags origin "$BASE_SHA"
       - name: Install Bandit
         run: python -m pip install 'bandit>=1.8,<2'
       - name: Analyze source and save JSON results (advisory)
@@ -43,6 +50,11 @@ jobs:
             echo "::warning::Bandit detected potential security issues; review report."
           fi
           exit 0
+      - name: Block new HIGH findings on changed Python lines
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python scripts/bandit_changed_lines_gate.py --report bandit-results.json --base "$BASE_SHA"
       - name: Upload Bandit report
         if: always()
         uses: actions/upload-artifact@v4
