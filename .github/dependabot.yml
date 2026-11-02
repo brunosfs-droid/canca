@@ -18,6 +18,10 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    # Python 3.10 remains a supported CI target; pycparser 3.12 requires 3.11+.
+    ignore:
+      - dependency-name: "pycparser"
+        versions: [">=3.12"]
     groups:
       credentialed-enrichment:
         patterns:
