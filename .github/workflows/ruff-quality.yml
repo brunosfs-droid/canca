@@ -1,0 +1,54 @@
+name: Python Ruff Quality Audit
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ruff-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ruff-advisory:
+    name: Ruff baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install Ruff
+        run: python -m pip install 'ruff>=0.14,<1'
+      - name: Audit Python correctness (advisory)
+        shell: bash
+        run: |
+          python -m ruff check . --select E4,E7,E9,F --output-format json > ruff-results.json
+          status=$?
+          python - <<'PY'
+          import json
+          from collections import Counter
+          with open("ruff-results.json", encoding="utf-8") as stream:
+              findings = json.load(stream)
+          print(f"Ruff findings: {len(findings)}")
+          for rule, count in sorted(Counter(row["code"] for row in findings).items()):
+              print(f"{rule}: {count}")
+          PY
+          if [ "$status" -ne 0 ]; then
+            echo "::warning::Ruff baseline has findings; review the report before enforcing a gate."
+          fi
+          exit 0
+      - name: Upload Ruff report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruff-python-quality
+          path: ruff-results.json
+          if-no-files-found: warn
+          retention-days: 7
