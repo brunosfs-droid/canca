@@ -198,8 +198,9 @@ class HostKeyTrustTests(unittest.TestCase):
                 link.symlink_to(target)
             except (OSError, NotImplementedError):
                 self.skipTest("symlinks unavailable")
-            with self.assertRaisesRegex(RuntimeError, "symbolic link"):
-                mod.prepare_ssh_client(link, "tofu")
+            with patch.object(mod, "paramiko", object()):
+                with self.assertRaisesRegex(RuntimeError, "symbolic link"):
+                    mod.prepare_ssh_client(link, "tofu")
 
     def test_tofu_save_failure_is_not_silenced(self):
         import tempfile
