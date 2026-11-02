@@ -1,0 +1,53 @@
+name: Python Static Security Audit
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 8 * * 4'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-static-security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bandit:
+    name: Bandit security baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Bandit
+        run: python -m pip install 'bandit>=1.8,<2'
+      - name: Analyze source and save JSON results (advisory)
+        shell: bash
+        run: |
+          set +e
+          bandit -r agent analyzer assessment asset_resolver collectors connected credential_manager credentialed_enrichment evidence_bundle ingestion network_discovery orchestrator persistence runtime server -f json -o bandit-results.json
+          code=$?
+          echo "Bandit exit code: $code"
+          if [ "$code" -gt 1 ]; then
+            echo "::warning::Bandit execution error; inspect the artifact and logs."
+          elif [ "$code" -eq 1 ]; then
+            echo "::warning::Bandit detected potential security issues; review report."
+          fi
+          exit 0
+      - name: Upload Bandit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-python-security
+          path: bandit-results.json
+          if-no-files-found: warn
+          retention-days: 7
