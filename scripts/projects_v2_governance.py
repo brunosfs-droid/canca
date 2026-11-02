@@ -141,7 +141,9 @@ def main():
         if not items["pageInfo"]["hasNextPage"]:
             break
         cursor = items["pageInfo"]["endCursor"]
-    print(json.dumps({"mode": "apply" if args.apply else "dry_run", "changes": audit,\n                      "metrics": audit_metrics(audit, inspected_items)},\n                     indent=2, ensure_ascii=False))
+    print(json.dumps({"mode": "apply" if args.apply else "dry_run", "changes": audit,
+                      "metrics": audit_metrics(audit, inspected_items)},
+                     indent=2, ensure_ascii=False))
     if any(a["action"] == "skipped_missing_option" for a in audit):
         sys.exit("One or more desired field options do not exist; no values were invented.")
 
