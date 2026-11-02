@@ -95,7 +95,6 @@ def audit_metrics(changes, inspected_items):
     return {
         "inspected_items": inspected_items,
         "field_values_inspected": inspected_items * len(FIELDS),
-        "classification_gaps_without_suggestion": "unknown",
         "proposed_changes": len(changes),
         "missing_by_field": by_field,
         "actions": dict(sorted(by_action.items())),
@@ -111,6 +110,7 @@ def main():
     cursor = None
     audit = []
     inspected_items = 0
+    missing_without_suggestion = {name: 0 for name in FIELDS}
     while True:
         project = graphql(QUERY, {"owner": OWNER, "number": PROJECT_NUMBER, "cursor": cursor})["user"]["projectV2"]
         if not project:
@@ -128,6 +128,9 @@ def main():
             existing = {v["field"]["name"]: v["name"] for v in item["fieldValues"]["nodes"]
                         if v and v.get("field") and v.get("name")}
             proposed = classification(content)
+            for field_name in FIELDS:
+                if not existing.get(field_name) and not proposed.get(field_name):
+                    missing_without_suggestion[field_name] += 1
             for field_name, value in proposed.items():
                 if not value or existing.get(field_name):
                     continue
@@ -143,8 +146,14 @@ def main():
         if not items["pageInfo"]["hasNextPage"]:
             break
         cursor = items["pageInfo"]["endCursor"]
+    metrics = audit_metrics(audit, inspected_items)
+    metrics["missing_without_suggestion"] = missing_without_suggestion
+    metrics["missing_total_by_field"] = {
+        name: metrics["missing_by_field"][name] + missing_without_suggestion[name]
+        for name in FIELDS
+    }
     print(json.dumps({"mode": "apply" if args.apply else "dry_run", "changes": audit,
-                      "metrics": audit_metrics(audit, inspected_items)},
+                      "metrics": metrics},
                      indent=2, ensure_ascii=False))
     if any(a["action"] == "skipped_missing_option" for a in audit):
         sys.exit("One or more desired field options do not exist; no values were invented.")
