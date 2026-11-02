@@ -25,11 +25,11 @@ jobs:
       fail-fast: false
       matrix:
         requirements:
-          - agent/requirements.txt
+          - agent/requirements-windows-service.txt
           - credentialed_enrichment/requirements-snmp.txt
           - credentialed_enrichment/requirements-ssh.txt
           - credentialed_enrichment/requirements-winrm.txt
-          - persistence/requirements.txt
+          - persistence/requirements-postgres.txt
     steps:
       - name: Check out source
         uses: actions/checkout@v4
