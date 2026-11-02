@@ -26,6 +26,11 @@ class GovernanceMetricsTests(unittest.TestCase):
         self.assertEqual(result["actions"]["dry_run"], 2)
         self.assertEqual(result["actions"]["skipped_missing_option"], 1)
 
+    def test_missing_fields_without_reliable_suggestion_are_counted(self):
+        missing = mod.gaps_without_suggestion(
+            {"Priority": "P1"}, {"Priority": None, "Workstream": "Security", "Target Release": None})
+        self.assertEqual(missing, ["Target Release"])
+
     def test_no_classification_is_not_interpreted_as_compliant(self):
         result = mod.audit_metrics([], inspected_items=7)
         self.assertEqual(result["proposed_changes"], 0)
