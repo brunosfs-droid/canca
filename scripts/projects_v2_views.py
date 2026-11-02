@@ -36,7 +36,7 @@ CREATE = """mutation($project:ID!, $name:String!, $layout:ProjectV2ViewLayout!) 
 def graphql(query, variables):
     args = ["gh", "api", "graphql", "-f", "query=" + query]
     for name, value in variables.items():
-        args += ["-f", name + "=" + str(value)]
+        args += ["-F" if isinstance(value, int) else "-f", name + "=" + str(value)]
     result = subprocess.run(args, capture_output=True, text=True, check=False)
     if result.returncode:
         raise RuntimeError("GraphQL request failed: " + result.stderr[:500])
