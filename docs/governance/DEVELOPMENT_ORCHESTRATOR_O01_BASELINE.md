@@ -63,3 +63,17 @@ df -h ~
 - [ ] Design backup/restore for SQLite with a transactional checkpoint, retention and manual recovery drill.
 - [ ] Demonstrate Windows logon/start, sleep/shutdown and WSL termination recovery in isolated tests during O05.
 - [ ] Obtain operator authorization before modifying Windows Task Scheduler, systemd, WSL config, credentials, network exposure or paid API access.
+
+## Workflow sample review — 2026-11-04
+
+Read-only spot inspection of eight existing workflows:
+- `python-ci.yml`: PR/push validation, top-level `contents: read`, `actions/checkout@v7`, `setup-python@v7`.
+- `codeql.yml`: PR, main push and weekly scan; explicit `security-events: write` used by CodeQL.
+- `projects-v2-governance.yml`: scheduled + manual; default `apply=false`; dedicated `PROJECTS_TOKEN`; concurrency group; writes Project classifications only with explicit apply.
+- `projects-v2-views.yml`: manual only, default `apply=false`; serialized governance views maintenance.
+- `release-preflight.yml`: manual read-only release preflight; no release or tag creation.
+- `four-phase-evidence.yml`: manual read-only evidence generation.
+- `dependency-security-audit.yml`: PR, push, schedule and dispatch; `contents: read`.
+- `security-quality-summary.yml`: manual and scheduled read-only summary.
+
+**Follow-up:** complete remaining workflow inventory before O01 approval. Some workflows retain `actions/checkout@v4` while other workflows use v7; verify compatibility and PR #276 before changing dependencies. Do not assume top-level `contents: read` covers separately provisioned Project token privileges. Do not add a competing Project metadata writer.
