@@ -23,3 +23,43 @@ Approved initial deployment: **user-managed local computer**, not AWS. This deci
 - O01 still must verify workstation OS, runtime installation, credentials, secret storage, startup mechanism and selected agent pricing before enabling unattended execution; do not publish local/private machine details.
 
 This is a recorded implementation constraint, **not** authorization to make production changes or bypass protected PR checks.
+
+## WSL2 Ubuntu host decision — 2026-11-04
+
+**Confirmed host:** Windows 11 with Ubuntu on WSL2. This replaces the earlier generic local-computer assumption. No AWS infrastructure.
+
+**Proposed boundary**
+- Ubuntu WSL2 owns the Python virtualenv, source worktree, SQLite database and restricted agent workspace. Use the Linux ext4 filesystem (for example, `~/canca-dev-orchestrator`), **not** `/mnt/c` for the SQLite database.
+- Windows Task Scheduler may launch the WSL distribution on user logon; use a non-elevated dedicated startup task after explicit local validation. A systemd service inside Ubuntu manages the worker with restart policy. Do **not** assume systemd services keep the WSL VM alive after all interactive/background processes exit.
+- Initial connection to GitHub uses authenticated API polling (no inbound ports, port forwarding, public listener or webhook tunnel). Use rate-limit-aware polling, bounded concurrency and backoff. Migrate to verified webhook delivery later only if warranted.
+- Persist state and checkpoint before planned Windows shutdown. After a power cut, reconcile GitHub run/PR/SHA and leases before resuming. Windows sleep/hibernation is not continuous execution.
+- Do not run as `root`; no global Windows admin privileges, no credentials in plaintext config or Git. Use OS-protected credential storage where available and test GitHub App/token scope before unattended execution.
+- Secrets/agent execution must remain separated; do not send privileged tokens to untrusted PR builds. Prefer sandboxed subprocess/container with constrained access.
+- Monthly paid service/API budget **BRL 30 maximum**, with verified pre-call metering and fail-closed cutoff. Do not enable paid autonomous work merely because WSL2 runs.
+
+**Local read-only preflight (operator, NOT executed by GitHub or this document)**
+
+PowerShell:
+```powershell
+wsl --status
+wsl --version
+wsl -l -v
+```
+Ubuntu:
+```bash
+cat /etc/os-release
+uname -r
+ps -p 1 -o comm=
+systemctl is-system-running
+python3 --version
+git --version
+df -h ~
+```
+`systemctl is-system-running` may return `degraded` due to unrelated services; inspect before changing settings. Systemd is supported in current WSL2; if disabled, plan an explicit later configuration change (`/etc/wsl.conf` with `[boot] systemd=true`) and a controlled WSL shutdown/restart. Do not change it as part of read-only preflight.
+
+**O01 acceptance additions**
+- [ ] Record Windows build, WSL version, Ubuntu release, Linux filesystem capacity and systemd state from sanitized operator output.
+- [ ] Select service user, virtualenv location and systemd unit hardening; draft Windows scheduled-start command without installing it.
+- [ ] Design backup/restore for SQLite with a transactional checkpoint, retention and manual recovery drill.
+- [ ] Demonstrate Windows logon/start, sleep/shutdown and WSL termination recovery in isolated tests during O05.
+- [ ] Obtain operator authorization before modifying Windows Task Scheduler, systemd, WSL config, credentials, network exposure or paid API access.
